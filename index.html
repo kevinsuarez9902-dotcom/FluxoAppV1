@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#4f46e5">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="manifest" href="./manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Fluxo">
+  <title>FluxoApp</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+<!-- APP HEADER -->
+<div class="app-header">
+  <div class="header-title">FluxoApp</div>
+  <div class="header-sub">Tu flujo laboral y financiero</div>
+  <button class="install-btn" id="install-btn" onclick="triggerInstall()">📲 Instalar app</button>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('resumen')" id="tab-resumen">
+    <span class="tab-icon">📊</span>RESUMEN
+  </button>
+  <button class="tab" onclick="switchTab('calendar')" id="tab-calendar">
+    <span class="tab-icon">📅</span>TURNOS
+  </button>
+  <button class="tab" onclick="switchTab('finanzas')" id="tab-finanzas">
+    <span class="tab-icon">💰</span>FINANZAS
+  </button>
+  <button class="tab" onclick="switchTab('estadisticas')" id="tab-estadisticas">
+    <span class="tab-icon">📈</span>STATS
+  </button>
+  <button class="tab" onclick="switchTab('ajustes')" id="tab-ajustes">
+    <span class="tab-icon">⚙️</span>AJUSTES
+  </button>
+</div>
+
+<!-- SECTION: RESUMEN -->
+<div class="section active" id="section-resumen">
+  <div id="resumen-content"></div>
+</div>
+
+<!-- SECTION: CALENDAR / TURNOS -->
+<div class="section" id="section-calendar">
+  <div id="cal-content"></div>
+</div>
+
+<!-- SECTION: FINANZAS -->
+<div class="section" id="section-finanzas">
+
+  <!-- Toggle -->
+  <div class="mov-toggle">
+    <button class="mov-toggle-btn active-gastos" id="mov-btn-gastos" onclick="switchMov('gastos')">
+      💸 Gastos
+    </button>
+    <button class="mov-toggle-btn" id="mov-btn-ingresos" onclick="switchMov('ingresos')">
+      💰 Ingresos
+    </button>
+    <button class="mov-toggle-btn" id="mov-btn-ahorros" onclick="switchMov('ahorros')">
+      🏦 Ahorros
+    </button>
+    <button class="mov-toggle-btn" id="mov-btn-deudas" onclick="switchMov('deudas')">
+      💳 Deudas
+    </button>
+    <button class="mov-toggle-btn" id="mov-btn-descuentos" onclick="switchMov('descuentos')">
+      ✂️ Desctos
+    </button>
+  </div>
+
+  <!-- SUB-PANEL: GASTOS -->
+  <div id="mov-gastos">
+    <div class="expense-form">
+      <div class="form-title">➕ Agregar Gasto</div>
+      <div class="form-row" style="margin-bottom:10px">
+        <div class="form-group" style="flex:1">
+          <label class="form-label">¿Aplica en…?</label>
+          <div style="display:flex;gap:6px;margin-top:2px">
+            <button id="scope-btn-month" class="scope-btn scope-active" onclick="setScopeMonth()">📅 Solo este mes</button>
+            <button id="scope-btn-all"   class="scope-btn" onclick="setScopeAll()">🔁 Todos los meses</button>
+          </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:2">
+          <label class="form-label">Descripción</label>
+          <input class="form-input" id="exp-name" type="text" placeholder="ej. Arriendo, gasolina..." />
+        </div>
+        <div class="form-group" style="flex:1">
+          <label class="form-label">Frecuencia</label>
+          <select class="form-select" id="exp-type" onchange="onExpTypeChange()">
+            <option value="monthly">Mensual</option>
+            <option value="quincenal">Quincenal</option>
+            <option value="daily">Diario</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:2">
+          <label class="form-label">Valor ($)</label>
+          <input class="form-input" id="exp-amount" type="number" placeholder="0" inputmode="numeric" />
+        </div>
+        <div class="form-group" style="flex:1">
+          <label class="form-label" id="exp-day-label">Día</label>
+          <input class="form-input" id="exp-day" type="number" placeholder="1-31" min="1" max="31" inputmode="numeric" />
+        </div>
+        <div class="form-group" style="flex:1;display:none" id="exp-day2-group">
+          <label class="form-label">Día Q2</label>
+          <input class="form-input" id="exp-day2" type="number" placeholder="16-31" min="16" max="31" inputmode="numeric" />
+        </div>
+      </div>
+      <button class="btn-add" onclick="addExpense()" style="width:100%">Agregar Gasto</button>
+    </div>
+    <div id="expense-list-content"></div>
+  </div>
+
+  <!-- SUB-PANEL: INGRESOS -->
+  <div id="mov-ingresos" style="display:none">
+    <div class="expense-form" style="border-color:rgba(16,185,129,0.2)">
+      <div class="form-title" style="color:#6ee7b7">➕ Agregar Ingreso Extra</div>
+      <div class="form-row" style="margin-bottom:10px">
+        <div class="form-group" style="flex:1">
+          <label class="form-label">¿Aplica en…?</label>
+          <div style="display:flex;gap:6px;margin-top:2px">
+            <button id="inc-scope-btn-month" class="scope-btn scope-active" onclick="setIncScopeMonth()">📅 Solo este mes</button>
+            <button id="inc-scope-btn-all"   class="scope-btn" onclick="setIncScopeAll()">🔁 Todos los meses</button>
+          </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:2">
+          <label class="form-label">Descripción</label>
+          <input class="form-input" id="inc-name" type="text" placeholder="ej. Horas extras, bono..." />
+        </div>
+        <div class="form-group" style="flex:1">
+          <label class="form-label">Frecuencia</label>
+          <select class="form-select" id="inc-type" onchange="onIncTypeChange()">
+            <option value="monthly">Mensual</option>
+            <option value="quincenal">Quincenal</option>
+            <option value="daily">Diario</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:2">
+          <label class="form-label">Valor ($)</label>
+          <input class="form-input" id="inc-amount" type="number" placeholder="0" inputmode="numeric" />
+        </div>
+        <div class="form-group" style="flex:1">
+          <label class="form-label" id="inc-day-label">Día</label>
+          <input class="form-input" id="inc-day" type="number" placeholder="1-31" min="1" max="31" inputmode="numeric" />
+        </div>
+        <div class="form-group" style="flex:1;display:none" id="inc-day2-group">
+          <label class="form-label">Día Q2</label>
+          <input class="form-input" id="inc-day2" type="number" placeholder="16-31" min="16" max="31" inputmode="numeric" />
+        </div>
+      </div>
+      <button class="btn-add" onclick="addIncome()" style="width:100%;background:linear-gradient(135deg,#065f46,#10b981)">Agregar Ingreso</button>
+    </div>
+    <div id="income-list-content"></div>
+  </div>
+
+  <!-- SUB-PANEL: AHORROS -->
+  <div id="mov-ahorros" style="display:none">
+    <div class="expense-form" style="border-color:rgba(59,130,246,0.2)">
+      <div class="form-title" style="color:#93c5fd">🏦 Agregar Meta de Ahorro</div>
+      <div class="form-row">
+        <div class="form-group" style="flex:2">
+          <label class="form-label">Nombre</label>
+          <input class="form-input" id="sav-name" type="text" placeholder="ej. Vacaciones, emergencia..." />
+        </div>
+        <div class="form-group" style="flex:1">
+          <label class="form-label">Frecuencia</label>
+          <select class="form-select" id="sav-freq" onchange="onSavFreqChange()">
+            <option value="monthly">Mensual</option>
+            <option value="quincenal">Quincenal</option>
+            <option value="daily">Diario</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1">
+          <label class="form-label" id="sav-day-label">Día de aporte</label>
+          <input class="form-input" id="sav-day" type="number" placeholder="1-31" min="1" max="31" inputmode="numeric" />
+        </div>
+        <div class="form-group" id="sav-day2-group" style="flex:1;display:none">
+          <label class="form-label">Día Q2</label>
+          <input class="form-input" id="sav-day2" type="number" placeholder="16-31" min="16" max="31" inputmode="numeric" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1">
+          <label class="form-label">Meta ($)</label>
+          <input class="form-input" id="sav-goal" type="number" placeholder="0" inputmode="numeric" />
+        </div>
+        <div class="form-group" style="flex:1">
+          <label class="form-label" id="sav-monthly-label">Aporte ($)</label>
+          <input class="form-input" id="sav-monthly" type="number" placeholder="0" inputmode="numeric" />
+        </div>
+        <div class="form-group" style="flex:1">
+          <label class="form-label">Ya ahorrado ($)</label>
+          <input class="form-input" id="sav-saved" type="number" placeholder="0" inputmode="numeric" />
+        </div>
+      </div>
+      <button class="btn-add" onclick="addSaving()" style="width:100%;background:linear-gradient(135deg,#1e3a5f,#2563eb)">Agregar Meta</button>
+    </div>
+    <div id="saving-list-content"></div>
+  </div>
+
+</div>
+
+  <!-- SUB-PANEL: DEUDAS -->
+  <div id="mov-deudas" style="display:none">
+  <div class="expense-form" style="border-color:rgba(239,68,68,0.2)">
+    <div class="form-title" style="color:#fca5a5">💳 Agregar Deuda</div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2">
+        <label class="form-label">Nombre</label>
+        <input class="form-input" id="debt-name" type="text" placeholder="ej. Préstamo, tarjeta..." />
+      </div>
+      <div class="form-group" style="flex:1">
+        <label class="form-label">Frecuencia</label>
+        <select class="form-select" id="debt-freq" onchange="onDebtFreqChange()">
+          <option value="mensual">Mensual</option>
+          <option value="quincenal">Quincenal</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:1">
+        <label class="form-label">Monto Total ($)</label>
+        <input class="form-input" id="debt-total" type="number" placeholder="0" inputmode="numeric" />
+      </div>
+      <div class="form-group" style="flex:1">
+        <label class="form-label">Valor Cuota ($)</label>
+        <input class="form-input" id="debt-cuota" type="number" placeholder="0" inputmode="numeric" />
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:1">
+        <label class="form-label" id="debt-day-label">Día de pago</label>
+        <input class="form-input" id="debt-day" type="number" placeholder="1-31" min="1" max="31" inputmode="numeric" />
+      </div>
+      <div class="form-group" style="flex:1;display:none" id="debt-day2-group">
+        <label class="form-label">Día pago Q2</label>
+        <input class="form-input" id="debt-day2" type="number" placeholder="16-31" min="16" max="31" inputmode="numeric" />
+      </div>
+      <div class="form-group" style="flex:1">
+        <label class="form-label">Ya pagado ($)</label>
+        <input class="form-input" id="debt-paid" type="number" placeholder="0" inputmode="numeric" />
+      </div>
+    </div>
+    <button class="btn-add" onclick="addDebt()" style="width:100%;background:linear-gradient(135deg,#7f1d1d,#dc2626)">Agregar Deuda</button>
+  </div>
+  <div id="debt-list-content"></div>
+  </div>
+
+  <!-- SUB-PANEL: DESCUENTOS -->
+  <div id="mov-descuentos" style="display:none">
+
+  <div class="expense-form">
+    <div class="form-title">✂️ Agregar Descuento</div>
+    <div class="form-row" style="margin-bottom:10px">
+      <div class="form-group" style="flex:1">
+        <label class="form-label">¿Aplica en…?</label>
+        <div style="display:flex;gap:6px;margin-top:2px">
+          <button id="disc-scope-btn-all"   class="scope-btn scope-active" onclick="setDiscScopeAll()">🔁 Todos los meses</button>
+          <button id="disc-scope-btn-month" class="scope-btn" onclick="setDiscScopeMonth()">📅 Solo este mes</button>
+        </div>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2">
+        <label class="form-label">Nombre</label>
+        <input class="form-input" id="disc-name" type="text" placeholder="ej. Fondo empleados, Salud..." />
+      </div>
+      <div class="form-group" style="flex:1">
+        <label class="form-label">Frecuencia</label>
+        <select class="form-select" id="disc-freq">
+          <option value="quincenal">Quincenal</option>
+          <option value="mensual">Mensual</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:1">
+        <label class="form-label">Tipo</label>
+        <select class="form-select" id="disc-type" onchange="toggleDiscType()">
+          <option value="pct">Porcentaje (%)</option>
+          <option value="fixed">Valor fijo ($)</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:1" id="disc-pct-group">
+        <label class="form-label">Porcentaje</label>
+        <input class="form-input" id="disc-pct" type="number" placeholder="ej. 6" min="0" max="100" step="0.01" inputmode="decimal" />
+      </div>
+      <div class="form-group" style="flex:1;display:none" id="disc-fixed-group">
+        <label class="form-label">Valor ($)</label>
+        <input class="form-input" id="disc-fixed" type="number" placeholder="0" inputmode="numeric" />
+      </div>
+    </div>
+    <button class="btn-add" onclick="addDiscount()" style="width:100%;background:linear-gradient(135deg,#7c3aed,#a855f7)">Agregar Descuento</button>
+  </div>
+  <div id="discount-list-content"></div>
+  </div>
+
+</div>
+
+<!-- PRINT REPORT (oculto; visible solo al imprimir) -->
+<div id="print-report"></div>
+
+<!-- SECTION: ESTADÍSTICAS -->
+<div class="section" id="section-estadisticas">
+  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center">
+    <div style="font-size:48px;margin-bottom:16px">📈</div>
+    <div style="font-size:18px;font-weight:700;color:#e2e8f0;margin-bottom:8px">Estadísticas</div>
+    <div style="font-size:13px;color:#64748b">Próximamente — aquí verás gráficas y tendencias de tus finanzas</div>
+  </div>
+</div>
+
+<!-- SECTION: AJUSTES -->
+<div class="section" id="section-ajustes">
+
+  <!-- Notificaciones -->
+  <div class="s-card-full" style="margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div class="card-label" style="color:#a5b4fc">🔔 Notificaciones</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Aviso del turno del día siguiente</div>
+      </div>
+      <div id="notif-toggle-wrap">
+        <button id="notif-toggle-btn" onclick="toggleNotifications()" style="
+          border-radius:20px;padding:7px 16px;font-size:12px;font-weight:700;
+          cursor:pointer;font-family:'Outfit',sans-serif;border:none;transition:all 0.2s;
+        ">Activar</button>
+      </div>
+    </div>
+    <div id="notif-status" style="font-size:11px;margin-top:8px;color:var(--text-muted)"></div>
+  </div>
+
+  <!-- Inicio de control financiero -->
+  <div class="s-card-full" style="margin-bottom:14px">
+    <div class="card-label" style="color:#a5b4fc;margin-bottom:10px">📅 Inicio de control financiero</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">Los meses anteriores a esta fecha mostrarán valores en 0</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select class="form-select" id="ctrl-month" style="flex:1">
+        <option value="0">Enero</option><option value="1">Febrero</option>
+        <option value="2">Marzo</option><option value="3">Abril</option>
+        <option value="4">Mayo</option><option value="5">Junio</option>
+        <option value="6">Julio</option><option value="7">Agosto</option>
+        <option value="8">Septiembre</option><option value="9">Octubre</option>
+        <option value="10">Noviembre</option><option value="11">Diciembre</option>
+      </select>
+      <input class="form-input" id="ctrl-year" type="number" placeholder="2026" min="2020" max="2099"
+        style="flex:1;margin:0" inputmode="numeric" />
+      <button onclick="saveControlStartDate()"
+        style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;
+               border-radius:8px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer;
+               font-family:'Outfit',sans-serif;white-space:nowrap">Guardar</button>
+    </div>
+    <div id="ctrl-start-label" style="font-size:11px;color:#6366f1;margin-top:8px;font-weight:600"></div>
+  </div>
+
+  <!-- Tarjeta Sueldo -->
+  <div class="s-card-full" style="margin-bottom:14px;cursor:pointer;position:relative;overflow:hidden"
+    onclick="openSalaryModal()">
+    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#6366f1,#818cf8,transparent)"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div class="card-label" style="color:#a5b4fc">💰 Configuración de sueldo</div>
+        <div id="sal-current-label" style="font-size:11px;color:#64748b;margin-top:3px">Sin sueldo configurado</div>
+      </div>
+      <div style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;
+        border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600">Configurar</div>
+    </div>
+  </div>
+
+  <!-- Exportar PDF -->
+  <div class="s-card-full" style="margin-bottom:14px;cursor:pointer;position:relative;overflow:hidden"
+    onclick="exportPDF()">
+    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#6366f1,#a855f7,transparent)"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div class="card-label" style="color:#a5b4fc">📄 Exportar Reporte PDF</div>
+        <div style="font-size:11px;color:#64748b;margin-top:3px">Resumen financiero del mes actual</div>
+      </div>
+      <div style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;
+        border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600">Exportar</div>
+    </div>
+  </div>
+
+  <!-- Tarjeta Turno -->
+  <div class="s-card-full" style="margin-bottom:14px;cursor:pointer;position:relative;overflow:hidden"
+    onclick="openScheduleModal()">
+    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#8b5cf6,#a78bfa,transparent)"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div class="card-label" style="color:#c4b5fd">⚙️ Configuración de turno</div>
+        <div id="sched-current-label" style="font-size:11px;color:#64748b;margin-top:3px">Sin turno configurado</div>
+      </div>
+      <div style="background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.3);color:#c4b5fd;
+        border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600">Configurar</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL: TURNO -->
+<div class="modal-overlay" id="modal" onclick="closeBg(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-date" id="m-date"></div>
+    <div class="modal-shift-box" id="m-shift"></div>
+    <div class="modal-notice"         id="m-notice"  style="display:none">🚫 Este día fue marcado como <b>no laborado</b></div>
+    <div class="modal-partial-notice" id="m-partial" style="display:none">⏱️ Turno parcial registrado</div>
+    <div class="modal-incap-notice"   id="m-incap"   style="display:none">🏥 Incapacidad registrada</div>
+
+    <div id="partial-selector" style="display:none">
+      <div class="modal-section-label">Horas trabajadas (turno parcial)</div>
+      <div class="hours-grid" id="hours-grid"></div>
+    </div>
+
+    <div id="incap-selector" style="display:none">
+      <div class="modal-section-label">Valor de este día de incapacidad ($)</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+        <input id="incap-value-input" class="form-input" type="number" inputmode="numeric" placeholder="ej. 26670" style="flex:1;font-size:15px" />
+        <button onclick="confirmIncapacity()" class="modal-btn btn-incap" style="width:auto;padding:10px 16px;margin:0">✅ Confirmar</button>
+      </div>
+      <div style="font-size:11px;color:#64748b;margin-bottom:10px">💡 El valor varía según los días acumulados de incapacidad</div>
+    </div>
+
+    <button class="modal-btn btn-partial" id="btn-partial" onclick="showPartialSelector()">⏱️ Turno parcial (menos de 12h)</button>
+    <button class="modal-btn btn-incap"   id="btn-incap"   onclick="showIncapSelector()">🏥 Incapacidad</button>
+    <button class="modal-btn btn-absent"  id="btn-absent"  onclick="markAbsent()">😔 No fui a trabajar</button>
+
+    <div id="swap-btns" style="display:none">
+      <div class="modal-section-label" style="margin-top:4px">🔄 Cambiar turno a…</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <button id="btn-swap-dia"   class="modal-btn" onclick="swapShift('DÍA')"   style="background:linear-gradient(135deg,#78350f,#d97706);color:white;margin:0">☀️ Día</button>
+        <button id="btn-swap-noche" class="modal-btn" onclick="swapShift('NOCHE')" style="background:linear-gradient(135deg,#1e1b4b,#4338ca);color:white;margin:0">🌙 Noche</button>
+      </div>
+    </div>
+
+    <button class="modal-btn btn-restore" id="btn-restore" onclick="restoreDay()" style="display:none">✅ Restaurar turno original</button>
+    <button class="modal-btn btn-close"   onclick="closeModal()">Cerrar</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- MULTI-SELECT ACTION BAR -->
+<div class="multi-bar" id="multi-bar">
+  <div class="multi-bar-title" id="multi-bar-title">0 días seleccionados</div>
+  <div class="multi-bar-btns">
+    <button class="multi-bar-btn" onclick="bulkAction('incap')"   style="background:linear-gradient(135deg,#164e63,#0891b2);color:white">🏥 Incapacidad</button>
+    <button class="multi-bar-btn" onclick="bulkAction('absent')"  style="background:linear-gradient(135deg,#7f1d1d,#dc2626);color:white">🚫 Ausente</button>
+    <button class="multi-bar-btn" onclick="bulkAction('dia')"     style="background:linear-gradient(135deg,#78350f,#d97706);color:white">☀️ Día</button>
+    <button class="multi-bar-btn" onclick="bulkAction('noche')"   style="background:linear-gradient(135deg,#1e1b4b,#4338ca);color:white">🌙 Noche</button>
+    <button class="multi-bar-btn" onclick="bulkAction('parcial')" style="background:linear-gradient(135deg,#78350f,#b45309);color:white">⏱️ Mocho</button>
+    <button class="multi-bar-btn" onclick="bulkAction('restore')" style="background:linear-gradient(135deg,#14532d,#16a34a);color:white">✅ Restaurar</button>
+  </div>
+  <button class="multi-bar-cancel" onclick="exitMultiMode()">Cancelar selección</button>
+</div>
+
+<!-- BULK: INCAPACIDAD -->
+<div class="bulk-incap-overlay" id="bulk-incap-modal">
+  <div class="bulk-incap-sheet">
+    <div class="modal-handle"></div>
+    <div style="font-size:12px;color:#7dd3fc;text-align:center;margin-bottom:4px;letter-spacing:1px" id="bulk-incap-subtitle"></div>
+    <div style="font-family:'DM Serif Display',serif;font-size:20px;color:#e2e8f0;text-align:center;margin-bottom:16px">🏥 Valor de Incapacidad</div>
+    <div class="modal-incap-notice">El valor se aplicará a todos los días seleccionados</div>
+    <div class="modal-section-label">Valor por día ($)</div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+      <input id="bulk-incap-input" class="form-input" type="number" inputmode="numeric" placeholder="ej. 26670" style="flex:1;font-size:15px" />
+      <button onclick="confirmBulkIncap()" class="modal-btn btn-incap" style="width:auto;padding:10px 16px;margin:0">✅ Aplicar</button>
+    </div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:16px">💡 El valor varía según los días acumulados de incapacidad</div>
+    <button class="modal-btn btn-close" onclick="closeBulkIncap()">Cancelar</button>
+  </div>
+</div>
+
+<!-- BULK: TURNO PARCIAL -->
+<div class="bulk-incap-overlay" id="bulk-parcial-modal">
+  <div class="bulk-incap-sheet">
+    <div class="modal-handle"></div>
+    <div style="font-size:12px;color:#fcd34d;text-align:center;margin-bottom:4px;letter-spacing:1px" id="bulk-parcial-subtitle"></div>
+    <div style="font-family:'DM Serif Display',serif;font-size:20px;color:#e2e8f0;text-align:center;margin-bottom:16px">⏱️ Horas trabajadas</div>
+    <div class="modal-section-label">Selecciona las horas</div>
+    <div class="hours-grid" id="bulk-hours-grid"></div>
+    <button onclick="confirmBulkParcial()" class="modal-btn btn-partial" style="margin-bottom:8px">✅ Aplicar a todos</button>
+    <button class="modal-btn btn-close" onclick="closeBulkParcial()">Cancelar</button>
+  </div>
+</div>
+
+<!-- SCRIPTS (orden importante: config primero, app al final) -->
+<script src="./js/config.js"></script>
+<script src="./js/app.js"></script>
+<script src="./js/pwa.js"></script>
+
+</body>
+</html>
