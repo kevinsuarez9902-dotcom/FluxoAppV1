@@ -352,8 +352,8 @@ function getMonthDiscounts(y, m) {
 // ═══════════════════════════════════════════════════════
 const TAB_MAP = {
   resumen:      { sec: 'resumen',      tab: 'resumen' },
-  calendar:     { sec: 'calendar',     tab: 'calendar' },
   finanzas:     { sec: 'finanzas',     tab: 'finanzas' },
+  calendar:     { sec: 'calendar',     tab: 'calendar' },
   estadisticas: { sec: 'estadisticas', tab: 'estadisticas' },
   ajustes:      { sec: 'ajustes',      tab: 'ajustes' },
 };
@@ -372,7 +372,7 @@ function switchTab(tab) {
   }
   if (tab === 'resumen')      renderResumen();
   if (tab === 'calendar')     renderCal();
-  if (tab === 'finanzas')     { switchMov(movPanel); }
+  if (tab === 'finanzas')     { updateFinMenu(); if (currentFinPanel) openFinPanel(currentFinPanel); }
   if (tab === 'estadisticas') { renderEstadisticas(); }
   if (tab === 'ajustes')      { renderNotifStatus(); initSchedUI(); initSalaryUI(); updateControlStartLabel(); }
 }
@@ -381,6 +381,11 @@ function switchTab(tab) {
 let movPanel = 'gastos';
 function switchMov(panel) {
   movPanel = panel;
+  // If finanzas tab is active, open the panel directly
+  if (document.getElementById('section-finanzas').classList.contains('active')) {
+    openFinPanel(panel);
+    return;
+  }
   ['gastos','ingresos','ahorros','deudas','descuentos'].forEach(p => {
     const el = document.getElementById('mov-' + p);
     if (el) el.style.display = panel === p ? 'block' : 'none';
@@ -556,106 +561,239 @@ function renderResumen() {
   if (cnt.PARCIAL > 0) badgesHtml += `<span class="badge" style="background:#1c120022;color:#fbbf24;border:1px solid #d9770644">⏱️ Parcial: ${cnt.PARCIAL}</span>`;
   if (cnt.INCAP   > 0) badgesHtml += `<span class="badge" style="background:#082f49;color:#7dd3fc;border:1px solid #0891b244">🏥 Incap: ${cnt.INCAP}</span>`;
 
+  // ── Actividad reciente (últimos 5 movimientos) ──
+  const allActivity = [];
+  const { items: expItemsAct } = getMonthExpenses(Y, M);
+  const { items: incItemsAct  } = getMonthIncomes(Y, M);
+  const extrasAct = getMonthExtras(Y, M);
+  expItemsAct.forEach(e => allActivity.push({ icon: '🛒', iconBg: 'rgba(239,68,68,0.15)', name: e.name, meta: 'Gasto', amount: `-${fmt(e.appliedAmount)}`, color: '#f87171' }));
+  incItemsAct.forEach(i => allActivity.push({ icon: '💰', iconBg: 'rgba(16,185,129,0.15)', name: i.name, meta: 'Ingreso', amount: `+${fmt(i.amount)}`, color: '#6ee7b7' }));
+  extrasAct.forEach(e => {
+    const t = ['⏰','🌙','🎉','📅','➕'][['overtime','nocturnal','holiday','sunday','other'].indexOf(e.type)] || '➕';
+    allActivity.push({ icon: t, iconBg: 'rgba(245,158,11,0.15)', name: e.desc || 'Extra', meta: 'Extra/Recargo', amount: `+${fmt(e.qty*e.unitValue)}`, color: '#fbbf24' });
+  });
+  const recentActivity = allActivity.slice(0, 5);
+  const activityHtml = recentActivity.length > 0
+    ? recentActivity.map(a => `
+      <div class="activity-item">
+        <div class="activity-icon" style="background:${a.iconBg}">${a.icon}</div>
+        <div class="activity-info">
+          <div class="activity-name">${a.name}</div>
+          <div class="activity-meta">${a.meta} · ${MONTHS[M]} ${Y}</div>
+        </div>
+        <div class="activity-amount" style="color:${a.color}">${a.amount}</div>
+      </div>`).join('')
+    : '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">Sin movimientos este mes</div>';
+
+  // ── Comparativo vs mes anterior ──
+  let prevM = M - 1, prevY = Y;
+  if (prevM < 0) { prevM = 11; prevY--; }
+  const prevC = isBeforeControl(prevY, prevM) ? null : calcMonth(prevY, prevM);
+  const prevBal = prevC ? prevC.balance : null;
+  const balDiff = prevBal !== null ? c.balance - prevBal : null;
+  const balDiffPct = (prevBal && prevBal !== 0) ? Math.round(((c.balance - prevBal) / Math.abs(prevBal)) * 100) : null;
+
   document.getElementById('resumen-content').innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <button class="nav-btn" onclick="prevMonth()" style="background:rgba(99,102,241,0.1)">‹</button>
+
+    <!-- NAV HEADER -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <button class="nav-btn" onclick="prevMonth()">‹</button>
       <div style="text-align:center">
-        <div style="font-family:'DM Serif Display',serif;font-size:18px;color:#c7d2fe">${MONTHS[M]}</div>
-        <div style="font-size:11px;color:#6366f1;font-weight:500">${Y}</div>
+        <div style="font-size:18px;font-weight:700;color:var(--text)">${MONTHS[M]}</div>
+        <div style="font-size:11px;color:var(--accent);font-weight:600">${Y}</div>
       </div>
-      <button class="nav-btn" onclick="nextMonth()" style="background:rgba(99,102,241,0.1)">›</button>
+      <button class="nav-btn" onclick="nextMonth()">›</button>
     </div>
 
-    <div class="badges">${badgesHtml}</div>
-
-    <!-- 1. DINERO REAL DISPONIBLE — primero y en verde fuerte -->
-    <div class="balance-card" style="background:linear-gradient(135deg,#052e16,#065f46);border-color:rgba(16,185,129,0.35)">
-      <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#10b981,#34d399,transparent)"></div>
-      <div class="balance-label" style="color:#10b981">💵 Dinero Real Disponible</div>
-      <div class="balance-eq" style="font-size:9px;color:#6ee7b7">
-        Devengado ${fmt(c.totalEarn)}${c.extrasTotal > 0 ? ` + Extras ${fmt(c.extrasTotal)}` : ''}${incTotal > 0 ? ` + Ingresos ${fmt(incTotal)}` : ''} − Gastos ${fmt(expTotal)} − Desc. ${fmt(c.discounts || 0)}${debtTotal > 0 ? ` − Deudas ${fmt(debtTotal)}` : ''}${c.savingsContrib > 0 ? ` − Ahorros ${fmt(c.savingsContrib)}` : ''}
+    <!-- HERO SALDO con mini sparkline -->
+    ${(() => {
+      // Mini sparkline últimos 6 meses
+      const sparkData = [];
+      for (let i = 5; i >= 0; i--) {
+        let sy = Y, sm = M - i;
+        while (sm < 0) { sm += 12; sy--; }
+        if (!isBeforeControl(sy, sm)) {
+          sparkData.push(calcMonth(sy, sm).balance);
+        }
+      }
+      let sparkSvg = '';
+      if (sparkData.length > 1) {
+        const minV = Math.min(...sparkData);
+        const maxV = Math.max(...sparkData);
+        const range = maxV - minV || 1;
+        const pts = sparkData.map((v, i) => {
+          const x = (i / (sparkData.length - 1)) * 80;
+          const y = 30 - ((v - minV) / range) * 28;
+          return `${x},${y}`;
+        }).join(' ');
+        sparkSvg = `<svg viewBox="0 0 80 32" style="width:80px;height:32px;opacity:0.6">
+          <polyline points="${pts}" fill="none" stroke="#a78bfa" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="${(sparkData.length-1)/(sparkData.length-1)*80}" cy="${30-((sparkData[sparkData.length-1]-minV)/range)*28}"
+            r="2.5" fill="#a78bfa"/>
+        </svg>`;
+      }
+      return `
+    <div class="hero-balance-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div style="flex:1">
+          <div class="hero-balance-label">Saldo total</div>
+          <div class="hero-balance-amount">${fmt(c.balance)}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px">Este mes</div>
+          ${balDiffPct !== null ? `
+          <span class="hero-balance-trend ${balDiffPct >= 0 ? 'up' : 'down'}" style="margin-top:8px;display:inline-flex">
+            ${balDiffPct >= 0 ? '↑' : '↓'} ${Math.abs(balDiffPct)}% vs ${MONTHS[prevM]}
+          </span>` : ''}
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+          ${sparkSvg}
+        </div>
       </div>
-      <div class="balance-amount" style="color:#10b981">${fmt(c.balance)}</div>
+    </div>`;
+    })()}
+
+    <!-- 3 CARDS RÁPIDAS -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div class="s-card" style="border-left:3px solid #6ee7b7;padding:14px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div style="width:28px;height:28px;border-radius:8px;background:rgba(16,185,129,0.15);display:flex;align-items:center;justify-content:center;font-size:14px">💰</div>
+          <div class="card-label" style="color:#a7f3d0;font-size:10px;margin:0">Ingresos</div>
+        </div>
+        <div class="card-amount" style="color:#6ee7b7;font-size:18px">${fmt(c.totalEarn + incTotal + (c.extrasTotal||0))}</div>
+      </div>
+      <div class="s-card" style="border-left:3px solid #f87171;padding:14px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div style="width:28px;height:28px;border-radius:8px;background:rgba(239,68,68,0.15);display:flex;align-items:center;justify-content:center;font-size:14px">🛒</div>
+          <div class="card-label" style="color:#fca5a5;font-size:10px;margin:0">Gastos</div>
+        </div>
+        <div class="card-amount" style="color:#f87171;font-size:18px">${fmt(expTotal + (c.discounts||0))}</div>
+      </div>
+      ${c.savingsContrib > 0 || debtTotal > 0 ? `
+      <div class="s-card" style="border-left:3px solid #60a5fa;padding:14px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div style="width:28px;height:28px;border-radius:8px;background:rgba(59,130,246,0.15);display:flex;align-items:center;justify-content:center;font-size:14px">🏦</div>
+          <div class="card-label" style="color:#93c5fd;font-size:10px;margin:0">Ahorros</div>
+        </div>
+        <div class="card-amount" style="color:#60a5fa;font-size:18px">${fmt(c.savingsContrib)}</div>
+      </div>
+      <div class="s-card" style="border-left:3px solid #fca5a5;padding:14px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div style="width:28px;height:28px;border-radius:8px;background:rgba(239,68,68,0.12);display:flex;align-items:center;justify-content:center;font-size:14px">💳</div>
+          <div class="card-label" style="color:#fca5a5;font-size:10px;margin:0">Deudas</div>
+        </div>
+        <div class="card-amount" style="color:#fca5a5;font-size:18px">${fmt(debtTotal)}</div>
+      </div>` : ''}
     </div>
 
-    <!-- 2. QUINCENAS -->
-    <div class="summary-grid">
+    <!-- ACCIONES RÁPIDAS -->
+    <div style="margin-bottom:6px">
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:1px;margin-bottom:10px">ACCIONES RÁPIDAS</div>
+      <div class="quick-actions">
+        <div class="quick-btn" onclick="switchTab('finanzas');switchMov('ingresos')">
+          <div class="quick-btn-icon" style="background:rgba(16,185,129,0.2)">💰</div>
+          <div class="quick-btn-label" style="color:#6ee7b7">+ Ingreso</div>
+        </div>
+        <div class="quick-btn" onclick="switchTab('finanzas');switchMov('gastos')">
+          <div class="quick-btn-icon" style="background:rgba(239,68,68,0.2)">🛒</div>
+          <div class="quick-btn-label" style="color:#f87171">+ Gasto</div>
+        </div>
+        <div class="quick-btn" onclick="switchTab('finanzas');switchMov('ahorros')">
+          <div class="quick-btn-icon" style="background:rgba(59,130,246,0.2)">🏦</div>
+          <div class="quick-btn-label" style="color:#60a5fa">+ Ahorro</div>
+        </div>
+        <div class="quick-btn" onclick="exportPDF()">
+          <div class="quick-btn-icon" style="background:rgba(124,111,247,0.2)">📄</div>
+          <div class="quick-btn-label" style="color:#c4b5fd">PDF</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- QUINCENAS -->
+    <div class="summary-grid" style="margin-bottom:12px">
       <div class="s-card blue">
         <div class="card-label" style="color:#93c5fd">1ª Quincena</div>
         <div class="card-sub">Días 1 – 15</div>
-        <div class="card-detail">${salary && salary.type === 'fixed' ? `Sueldo fijo ${salary.fixedType === 'quincenal' ? 'quincenal' : '(½ mensual)'}` : `${c.q1h}h · ${q1w} turnos`}${c.q1a > 0 ? ` · <span style="color:var(--red)">-${c.q1a} aus.</span>` : ''}${c.q1p > 0 ? ` · <span style="color:var(--amber)">${c.q1p} parc.</span>` : ''}${c.q1i > 0 ? ` · <span style="color:#7dd3fc">🏥${c.q1i}</span>` : ''}</div>
+        <div class="card-detail">${salary && salary.type === 'fixed' ? 'Sueldo fijo' : `${c.q1h}h · ${q1w} turnos`}${c.q1a > 0 ? ` · <span style="color:var(--red)">-${c.q1a} aus.</span>` : ''}${c.q1i > 0 ? ` · <span style="color:#7dd3fc">🏥${c.q1i}</span>` : ''}</div>
         <div class="card-amount blue">${fmt(c.q1earn)}</div>
       </div>
       <div class="s-card blue">
         <div class="card-label" style="color:#93c5fd">2ª Quincena</div>
         <div class="card-sub">Días 16 – ${dim(Y, M)}</div>
-        <div class="card-detail">${salary && salary.type === 'fixed' ? `Sueldo fijo ${salary.fixedType === 'quincenal' ? 'quincenal' : '(½ mensual)'}` : `${c.q2h}h · ${q2w} turnos`}${c.q2a > 0 ? ` · <span style="color:var(--red)">-${c.q2a} aus.</span>` : ''}${c.q2p > 0 ? ` · <span style="color:var(--amber)">${c.q2p} parc.</span>` : ''}${c.q2i > 0 ? ` · <span style="color:#7dd3fc">🏥${c.q2i}</span>` : ''}</div>
+        <div class="card-detail">${salary && salary.type === 'fixed' ? 'Sueldo fijo' : `${c.q2h}h · ${q2w} turnos`}${c.q2a > 0 ? ` · <span style="color:var(--red)">-${c.q2a} aus.</span>` : ''}${c.q2i > 0 ? ` · <span style="color:#7dd3fc">🏥${c.q2i}</span>` : ''}</div>
         <div class="card-amount blue">${fmt(c.q2earn)}</div>
       </div>
     </div>
 
-    <!-- 3. TOTAL DEVENGADO | INGRESOS EXTRAS -->
-    <div class="summary-grid">
-      <div class="s-card" style="border-left:3px solid #818cf8;position:relative">
-        <div class="card-label" style="color:#c4b5fd">💰 Total Devengado</div>
-        <div class="card-detail" style="color:#c4b5fd">${salary && salary.type === 'fixed' ? 'Sueldo fijo' : `${c.totalHours}h trabajadas`}${c.absentCount > 0 ? ` · ${c.absentCount} aus.` : ''}</div>
-        <div class="card-amount purple" style="font-size:20px">${fmt(c.totalEarn)}</div>
+    <!-- TOTAL DEVENGADO | INGRESOS EXTRAS -->
+    <div class="summary-grid" style="margin-bottom:12px">
+      <div class="s-card" style="border-left:3px solid #818cf8">
+        <div class="card-label" style="color:#c4b5fd">Total Devengado</div>
+        <div class="card-detail" style="color:#c4b5fd">${salary && salary.type === 'fixed' ? 'Sueldo fijo' : `${c.totalHours}h`}${c.absentCount > 0 ? ` · ${c.absentCount} aus.` : ''}</div>
+        <div class="card-amount purple" style="font-size:18px">${fmt(c.totalEarn)}</div>
       </div>
-      <div class="s-card" style="border-left:3px solid #6ee7b7;position:relative">
-        <div class="card-label" style="color:#a7f3d0">💰 Ingresos Extras</div>
-        <div class="card-detail" style="color:#a7f3d0">${incItems.length + (c.extrasTotal > 0 ? 1 : 0)} concepto${(incItems.length + (c.extrasTotal > 0 ? 1 : 0)) !== 1 ? 's' : ''}</div>
-        <div class="card-amount" style="color:#6ee7b7;font-size:20px">+${fmt(incTotal + (c.extrasTotal || 0))}</div>
+      <div class="s-card" style="border-left:3px solid #6ee7b7">
+        <div class="card-label" style="color:#a7f3d0">Ingresos Extras</div>
+        <div class="card-detail" style="color:#a7f3d0">${incItems.length + (c.extrasTotal > 0 ? 1 : 0)} concepto(s)</div>
+        <div class="card-amount" style="color:#6ee7b7;font-size:18px">+${fmt(incTotal + (c.extrasTotal || 0))}</div>
       </div>
     </div>
 
-    <!-- 4. GASTOS | DESCUENTOS -->
-    <div class="summary-grid">
+    <!-- GASTOS | DESCUENTOS -->
+    <div class="summary-grid" style="margin-bottom:12px">
       <div class="s-card red">
         <div class="card-label" style="color:#fca5a5">Gastos</div>
-        <div class="card-sub">${expItems.length} concepto${expItems.length !== 1 ? 's' : ''}</div>
+        <div class="card-sub">${expItems.length} concepto(s)</div>
         <div class="card-amount red" style="font-size:18px">${fmt(expTotal)}</div>
       </div>
       <div class="s-card" style="border-left:3px solid #a855f7">
         <div class="card-label" style="color:#c084fc">Descuentos</div>
-        <div class="card-sub">${discounts.length} descuento${discounts.length !== 1 ? 's' : ''}</div>
+        <div class="card-sub">${discounts.length} descuento(s)</div>
         <div class="card-amount" style="color:#c084fc;font-size:18px">${fmt(c.discounts || 0)}</div>
       </div>
     </div>
 
-    <!-- 5. DEUDAS | AHORROS -->
+    <!-- DEUDAS | AHORROS -->
     ${(debtTotal > 0 || c.savingsContrib > 0) ? `
-    <div class="summary-grid">
-      ${debtTotal > 0 ? `
-      <div class="s-card" style="border-left:3px solid #ef4444;position:relative">
-        <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#ef4444,transparent)"></div>
+    <div class="summary-grid" style="margin-bottom:12px">
+      <div class="s-card" style="border-left:3px solid #ef4444">
         <div class="card-label" style="color:#fca5a5">💳 Deudas</div>
-        <div class="card-sub" style="color:#fca5a5">${debts.filter(d => (d.total-(d.paid||0)) > 0).length} activa${debts.filter(d => (d.total-(d.paid||0)) > 0).length !== 1 ? 's' : ''}</div>
+        <div class="card-sub" style="color:#fca5a5">${debts.filter(d=>(d.total-(d.paid||0))>0).length} activa(s)</div>
         <div class="card-amount red" style="font-size:18px">−${fmt(debtTotal)}</div>
-      </div>` : '<div class="s-card" style="border-left:3px solid #374151"><div class="card-label" style="color:#475569">💳 Deudas</div><div class="card-amount" style="color:#475569;font-size:18px">$0</div></div>'}
-      ${c.savingsContrib > 0 ? `
-      <div class="s-card" style="border-left:3px solid #3b82f6;position:relative">
-        <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#3b82f6,transparent)"></div>
+      </div>
+      <div class="s-card" style="border-left:3px solid #3b82f6">
         <div class="card-label" style="color:#93c5fd">🏦 Ahorros</div>
-        <div class="card-sub" style="color:#93c5fd">${savings.filter(s => (s.goal-(s.saved||0)) > 0).length} meta${savings.filter(s => (s.goal-(s.saved||0)) > 0).length !== 1 ? 's' : ''}</div>
+        <div class="card-sub" style="color:#93c5fd">${savings.filter(s=>(s.goal-(s.saved||0))>0).length} meta(s)</div>
         <div class="card-amount blue" style="font-size:18px">−${fmt(c.savingsContrib)}</div>
-      </div>` : '<div class="s-card" style="border-left:3px solid #374151"><div class="card-label" style="color:#475569">🏦 Ahorros</div><div class="card-amount" style="color:#475569;font-size:18px">$0</div></div>'}
+      </div>
     </div>` : ''}
 
-    <!-- 6. SALDO ACUMULADO -->
+    <!-- SALDO ACUMULADO -->
     ${(() => {
       const prevAccum  = getPrevAccumulated(Y, M);
       const totalAccum = getAccumulatedBalance(Y, M);
       const hasPrev    = prevAccum !== 0;
       return `
-    <div class="balance-card" style="background:linear-gradient(135deg,#0c1433 0%,#1a1035 100%);border-color:rgba(139,92,246,0.3)">
+    <div class="balance-card" style="background:linear-gradient(135deg,#0c1433,#1a1035);border-color:rgba(139,92,246,0.3);margin-bottom:14px">
       <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#6366f1,#a855f7,transparent)"></div>
       <div class="balance-label" style="color:#c4b5fd;letter-spacing:3px">📈 Saldo Acumulado</div>
-      ${hasPrev
-        ? `<div class="balance-eq" style="color:#a78bfa">Arrastre ${fmt(prevAccum)} + Saldo mes ${fmt(c.balance)}</div>`
-        : `<div class="balance-eq" style="color:#a78bfa">Primer mes registrado · sin arrastre</div>`}
+      ${hasPrev ? `<div class="balance-eq" style="color:#a78bfa">Arrastre ${fmt(prevAccum)} + Saldo mes ${fmt(c.balance)}</div>`
+                : `<div class="balance-eq" style="color:#a78bfa">Primer mes registrado</div>`}
       <div class="balance-amount" style="color:${totalAccum >= 0 ? '#a78bfa' : '#f87171'}">${fmt(totalAccum)}</div>
     </div>`;
     })()}
+
+    <!-- ACTIVIDAD RECIENTE -->
+    ${recentActivity.length > 0 ? `
+    <div class="s-card-full" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div class="card-label" style="color:#a5b4fc;margin:0">Actividad reciente</div>
+        <div style="font-size:11px;color:var(--accent);cursor:pointer" onclick="switchTab('finanzas')">Ver todo →</div>
+      </div>
+      ${activityHtml}
+    </div>` : ''}
+
+    <!-- TURNOS BADGES -->
+    <div class="badges" style="margin-bottom:8px">${badgesHtml}</div>
   `;
 }
 
@@ -1972,11 +2110,11 @@ function reRender() {
   if (active === 'section-resumen')      renderResumen();
   if (active === 'section-calendar')     renderCal();
   if (active === 'section-finanzas') {
-    if (movPanel === 'gastos')      renderExpenses();
-    if (movPanel === 'ingresos')    renderIncomes();
-    if (movPanel === 'ahorros')     renderSavings();
-    if (movPanel === 'deudas')      renderDebts();
-    if (movPanel === 'descuentos')  renderDiscounts();
+    if (currentFinPanel) {
+      FIN_PANELS[currentFinPanel] && FIN_PANELS[currentFinPanel].render();
+    } else {
+      updateFinMenu();
+    }
   }
   // Siempre actualizar listas aunque no estén visibles
   renderSavings();
@@ -2238,6 +2376,183 @@ function exportPDF() {
   setTimeout(() => window.print(), 150);
 }
 
+
+// ═══════════════════════════════════════════════════════
+// EXPORTAR PDF DECLARACIÓN DE RENTA ANUAL
+// ═══════════════════════════════════════════════════════
+function exportRentaPDF() {
+  const year = Y;
+  const dateStr = new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
+  const monthsData = [];
+  for (let m = 0; m < 12; m++) {
+    if (isBeforeControl(year, m)) { monthsData.push(null); continue; }
+    const c = calcMonth(year, m);
+    const extras = getMonthExtrasTotal(year, m);
+    const { items: incItems, total: incTotal } = getMonthIncomes(year, m);
+    const { total: expTotal } = getMonthExpenses(year, m);
+    const discData = getMonthDiscounts(year, m);
+    monthsData.push({ m, c, extras, incTotal, expTotal, discTotal: discData.total });
+  }
+  const validMonths = monthsData.filter(m => m !== null);
+  const totalIngresos   = validMonths.reduce((s,m) => s + m.c.totalEarn + m.incTotal + m.extras, 0);
+  const totalGastos     = validMonths.reduce((s,m) => s + m.expTotal, 0);
+  const totalDescuentos = validMonths.reduce((s,m) => s + m.discTotal, 0);
+  const totalDeudas     = validMonths.reduce((s,m) => s + m.c.debts, 0);
+  const totalAhorros    = validMonths.reduce((s,m) => s + m.c.savingsContrib, 0);
+  const totalEgresos    = totalGastos + totalDescuentos + totalDeudas + totalAhorros;
+  const saldoAnual      = totalIngresos - totalEgresos;
+  const totalAhorradoActual = savings.reduce((s,sv) => s + (sv.saved||0), 0);
+  const totalDeudaPendiente = debts.reduce((s,d) => s + Math.max(d.total-(d.paid||0),0), 0);
+  const saldoAcumAnual  = getAccumulatedBalance(year, 11);
+  const patrimonioNeto  = totalAhorradoActual + Math.max(saldoAcumAnual,0) - totalDeudaPendiente;
+
+  const monthRows = validMonths.map(m => {
+    const ingresos = m.c.totalEarn + m.incTotal + m.extras;
+    const egresos  = m.expTotal + m.discTotal + m.c.debts + m.c.savingsContrib;
+    const saldo    = m.c.balance;
+    return `<tr>
+      <td style="font-weight:600;color:#374151;padding:6px 10px">${MONTHS[m.m]}</td>
+      <td style="color:#10b981;font-family:'DM Mono',monospace;text-align:right;padding:6px 10px">${fmt(ingresos)}</td>
+      <td style="color:#ef4444;font-family:'DM Mono',monospace;text-align:right;padding:6px 10px">${fmt(egresos)}</td>
+      <td style="font-weight:700;color:${saldo>=0?'#16a34a':'#dc2626'};font-family:'DM Mono',monospace;text-align:right;padding:6px 10px">${fmt(saldo)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('print-report').innerHTML = `
+  <div class="pdf-page">
+    <div class="pdf-header">
+      <div class="pdf-header-left">
+        <div class="pdf-logo-box">🇨🇴</div>
+        <div>
+          <div class="pdf-app-name">Declaración de Renta</div>
+          <div class="pdf-app-sub">Resumen Año Gravable ${year} · Formulario 210</div>
+        </div>
+      </div>
+      <div class="pdf-header-right">
+        <div class="pdf-month-label">${year}</div>
+        <div class="pdf-generated">Generado: ${dateStr}</div>
+        <div class="pdf-generated" style="color:#ef4444;margin-top:2px">⚠️ Solo referencia — verificar con contador</div>
+      </div>
+    </div>
+
+    <div class="pdf-top-grid">
+      <div class="pdf-top-card blue">
+        <div class="pdf-top-card-icon">💰</div>
+        <div class="pdf-top-card-label">Total Ingresos Brutos</div>
+        <div class="pdf-top-card-val">${fmt(totalIngresos)}</div>
+        <div class="pdf-top-card-sub">Casillas 33–48 Form. 210</div>
+      </div>
+      <div class="pdf-top-card red">
+        <div class="pdf-top-card-icon">📋</div>
+        <div class="pdf-top-card-label">Total Deducciones</div>
+        <div class="pdf-top-card-val">${fmt(totalDescuentos)}</div>
+        <div class="pdf-top-card-sub">Casillas 80–88 Form. 210</div>
+      </div>
+      <div class="pdf-top-card green">
+        <div class="pdf-top-card-icon">📊</div>
+        <div class="pdf-top-card-label">Ingreso Neto del Año</div>
+        <div class="pdf-top-card-val">${fmt(saldoAnual)}</div>
+        <div class="pdf-top-card-sub">Base aprox. de tributación</div>
+      </div>
+    </div>
+
+    <div class="pdf-table-section" style="margin-bottom:14px">
+      <div class="pdf-section-heading">📥 Ingresos del Año ${year} — Casillas 33 a 48</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px">
+          <div style="font-size:9px;color:#16a34a;font-weight:700;letter-spacing:1px;margin-bottom:4px">INGRESOS LABORALES</div>
+          <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:#15803d">${fmt(validMonths.reduce((s,m)=>s+m.c.totalEarn,0))}</div>
+          <div style="font-size:9px;color:#4ade80;margin-top:2px">Sueldos y salarios del año</div>
+        </div>
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px">
+          <div style="font-size:9px;color:#d97706;font-weight:700;letter-spacing:1px;margin-bottom:4px">OTROS INGRESOS</div>
+          <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:#b45309">${fmt(validMonths.reduce((s,m)=>s+m.incTotal+m.extras,0))}</div>
+          <div style="font-size:9px;color:#fbbf24;margin-top:2px">Extras, recargos e ingresos adicionales</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pdf-table-section" style="margin-bottom:14px">
+      <div class="pdf-section-heading">📤 Deducciones del Año — Casillas 80 a 88</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:8px;padding:10px">
+          <div style="font-size:9px;color:#e11d48;font-weight:700;letter-spacing:1px;margin-bottom:4px">GASTOS</div>
+          <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:700;color:#be123c">${fmt(totalGastos)}</div>
+          <div style="font-size:9px;color:#fb7185;margin-top:2px">Gastos del año</div>
+        </div>
+        <div style="background:#fdf4ff;border:1px solid #e9d5ff;border-radius:8px;padding:10px">
+          <div style="font-size:9px;color:#7c3aed;font-weight:700;letter-spacing:1px;margin-bottom:4px">DESCUENTOS</div>
+          <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:700;color:#6d28d9">${fmt(totalDescuentos)}</div>
+          <div style="font-size:9px;color:#c4b5fd;margin-top:2px">Aportes salud, pensión, etc.</div>
+        </div>
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px">
+          <div style="font-size:9px;color:#1d4ed8;font-weight:700;letter-spacing:1px;margin-bottom:4px">OBLIGACIONES</div>
+          <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:700;color:#1e40af">${fmt(totalDeudas+totalAhorros)}</div>
+          <div style="font-size:9px;color:#93c5fd;margin-top:2px">Deudas + aportes a ahorros</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pdf-table-section" style="margin-bottom:14px">
+      <div class="pdf-section-heading">🏛️ Patrimonio al 31 de Diciembre ${year} — Casillas 28 a 32</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px">
+          <div style="font-size:9px;color:#16a34a;font-weight:700;letter-spacing:1px;margin-bottom:4px">ACTIVOS (AHORROS)</div>
+          <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:700;color:#15803d">${fmt(totalAhorradoActual)}</div>
+          <div style="font-size:9px;color:#4ade80;margin-top:2px">Total ahorrado acumulado</div>
+        </div>
+        <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:8px;padding:10px">
+          <div style="font-size:9px;color:#e11d48;font-weight:700;letter-spacing:1px;margin-bottom:4px">PASIVOS (DEUDAS)</div>
+          <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:700;color:#be123c">${fmt(totalDeudaPendiente)}</div>
+          <div style="font-size:9px;color:#fb7185;margin-top:2px">Deudas pendientes</div>
+        </div>
+        <div style="background:${patrimonioNeto>=0?'#f0fdf4':'#fff1f2'};border:1px solid ${patrimonioNeto>=0?'#bbf7d0':'#fecdd3'};border-radius:8px;padding:10px">
+          <div style="font-size:9px;color:${patrimonioNeto>=0?'#16a34a':'#e11d48'};font-weight:700;letter-spacing:1px;margin-bottom:4px">PATRIMONIO NETO</div>
+          <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:700;color:${patrimonioNeto>=0?'#15803d':'#be123c'}">${fmt(patrimonioNeto)}</div>
+          <div style="font-size:9px;color:#94a3b8;margin-top:2px">Activos − Pasivos</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pdf-table-section" style="margin-bottom:14px">
+      <div class="pdf-section-heading">📅 Resumen Mensual ${year}</div>
+      <table style="width:100%;border-collapse:collapse;font-size:10px">
+        <thead>
+          <tr style="background:#1e293b">
+            <th style="padding:7px 10px;text-align:left;color:white;font-size:9px">MES</th>
+            <th style="padding:7px 10px;text-align:right;color:#6ee7b7;font-size:9px">INGRESOS</th>
+            <th style="padding:7px 10px;text-align:right;color:#f87171;font-size:9px">EGRESOS</th>
+            <th style="padding:7px 10px;text-align:right;color:#a5b4fc;font-size:9px">SALDO</th>
+          </tr>
+        </thead>
+        <tbody>${monthRows}</tbody>
+        <tfoot>
+          <tr style="background:#f8fafc;border-top:2px solid #e2e8f0">
+            <td style="padding:8px 10px;font-weight:700;color:#1e293b">TOTAL ${year}</td>
+            <td style="padding:8px 10px;text-align:right;font-weight:700;color:#16a34a;font-family:'DM Mono',monospace">${fmt(totalIngresos)}</td>
+            <td style="padding:8px 10px;text-align:right;font-weight:700;color:#dc2626;font-family:'DM Mono',monospace">${fmt(totalEgresos)}</td>
+            <td style="padding:8px 10px;text-align:right;font-weight:700;color:${saldoAnual>=0?'#16a34a':'#dc2626'};font-family:'DM Mono',monospace">${fmt(saldoAnual)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px;margin:0 0 16px;font-size:9px;color:#92400e">
+      <strong>⚠️ Nota importante:</strong> Este documento es un resumen de referencia generado por FluxoApp.
+      No reemplaza el asesoramiento de un contador ni la verificación oficial ante la DIAN.
+      Los valores de retención en la fuente, activos fijos e inversiones deben verificarse con su contador.
+    </div>
+
+    <div class="pdf-footer">
+      <div class="pdf-footer-left">
+        <span class="pdf-footer-shield">🛡️</span>
+        <span>Generado por <strong>FluxoApp</strong> · Año gravable ${year}</span>
+      </div>
+      <div>Documento de referencia · Verificar con contador</div>
+    </div>
+  </div>`;
+  setTimeout(() => window.print(), 150);
+}
 // ═══════════════════════════════════════════════════════
 // MULTI-SELECT
 // ═══════════════════════════════════════════════════════
@@ -2637,6 +2952,112 @@ function initSchedUI() {
 }
 
 
+
+
+
+// ═══════════════════════════════════════════════════════
+// FINANZAS — navegación por capas
+// ═══════════════════════════════════════════════════════
+
+const FIN_PANELS = {
+  gastos:      { title: 'Gastos',      icon: '💸', render: renderExpenses },
+  ingresos:    { title: 'Ingresos',    icon: '💰', render: renderIncomes },
+  ahorros:     { title: 'Ahorros',     icon: '🏦', render: renderSavings },
+  deudas:      { title: 'Deudas',      icon: '💳', render: renderDebts },
+  descuentos:  { title: 'Descuentos',  icon: '✂️', render: renderDiscounts },
+};
+
+let currentFinPanel = null;
+
+function openFinPanel(panel) {
+  currentFinPanel = panel;
+  movPanel = panel;
+  const p = FIN_PANELS[panel];
+  document.getElementById('fin-menu').style.display = 'none';
+  document.getElementById('fin-panel').style.display = 'block';
+  document.getElementById('fin-panel-title').textContent = p.icon + ' ' + p.title;
+
+  // Show the correct panel div inside fin-panel-content
+  const contentEl = document.getElementById('fin-panel-content');
+  const panelDiv  = document.getElementById('mov-' + panel);
+  if (panelDiv) {
+    // Hide all panels first
+    ['gastos','ingresos','ahorros','deudas','descuentos'].forEach(pp => {
+      const el = document.getElementById('mov-' + pp);
+      if (el) { el.style.display = 'none'; contentEl.appendChild(el); }
+    });
+    // Show this panel
+    panelDiv.style.display = 'block';
+  }
+
+  // Render content
+  p.render();
+}
+
+function closeFinPanel() {
+  currentFinPanel = null;
+  movPanel = 'gastos';
+  document.getElementById('fin-panel').style.display = 'none';
+  document.getElementById('fin-menu').style.display = 'block';
+  // Hide all sub-panels
+  ['gastos','ingresos','ahorros','deudas','descuentos'].forEach(p => {
+    const el = document.getElementById('mov-' + p);
+    if (el) el.style.display = 'none';
+  });
+  updateFinMenu();
+}
+
+function updateFinMenu() {
+  // Update values shown in menu
+  const { total: expTotal } = getMonthExpenses(Y, M);
+  const { total: incTotal } = getMonthIncomes(Y, M);
+  const debtTotal = getMonthDebtPayment(Y, M);
+  const savTotal  = getMonthSavingsTotal(Y, M);
+  const discData  = getMonthDiscounts(Y, M);
+
+  const vals = {
+    gastos:     expTotal > 0     ? `-${fmt(expTotal)}`    : '',
+    ingresos:   incTotal > 0     ? `+${fmt(incTotal)}`    : '',
+    ahorros:    savTotal > 0     ? `-${fmt(savTotal)}`    : '',
+    deudas:     debtTotal > 0    ? `-${fmt(debtTotal)}`   : '',
+    descuentos: discData.total > 0 ? `-${fmt(discData.total)}` : '',
+  };
+
+  Object.entries(vals).forEach(([key, val]) => {
+    const el = document.getElementById('fin-val-' + key);
+    if (el) el.textContent = val;
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// USUARIO — nombre y saludo
+// ═══════════════════════════════════════════════════════
+const USER_NAME_KEY = 'fluxo_user_name';
+
+function saveUserName() {
+  const input = document.getElementById('user-name-input');
+  if (!input) return;
+  const name = input.value.trim();
+  if (!name) { toast('⚠️ Escribe tu nombre'); return; }
+  localStorage.setItem(USER_NAME_KEY, name);
+  updateGreeting();
+  toast('✅ Nombre guardado');
+}
+
+function updateGreeting() {
+  const name = localStorage.getItem(USER_NAME_KEY);
+  const el   = document.getElementById('header-greeting');
+  const inp  = document.getElementById('user-name-input');
+  if (el) {
+    const hour = new Date().getHours();
+    const timeGreet = hour < 12 ? 'Buenos días' : hour < 18 ? 'Buenas tardes' : 'Buenas noches';
+    el.textContent = name ? `${timeGreet}, ${name} 👋` : 'Bienvenido 👋';
+  }
+  if (inp && !inp.value) {
+    const saved = localStorage.getItem(USER_NAME_KEY);
+    if (saved) inp.value = saved;
+  }
+}
 
 // ═══════════════════════════════════════════════════════
 // EXTRAS (horas extra, recargos, festivos)
@@ -3359,4 +3780,6 @@ function updateControlStartLabel() {
 updateControlStartLabel();
 initSchedUI();
 initSalaryUI();
+updateGreeting();
+updateFinMenu();
 renderResumen();

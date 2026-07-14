@@ -17,27 +17,47 @@
 
 <!-- APP HEADER -->
 <div class="app-header">
-  <div class="header-title">FluxoApp</div>
-  <div class="header-sub">Tu flujo laboral y financiero</div>
+  <div class="header-top-row">
+    <div>
+      <div class="header-greeting" id="header-greeting">Bienvenido 👋</div>
+      <div class="header-title">FluxoApp</div>
+    </div>
+    <button class="header-notif-btn">🔔</button>
+  </div>
   <button class="install-btn" id="install-btn" onclick="triggerInstall()">📲 Instalar app</button>
 </div>
 
 <!-- TABS -->
 <div class="tabs">
   <button class="tab active" onclick="switchTab('resumen')" id="tab-resumen">
-    <span class="tab-icon">📊</span>RESUMEN
-  </button>
-  <button class="tab" onclick="switchTab('calendar')" id="tab-calendar">
-    <span class="tab-icon">📅</span>TURNOS
+    <span class="tab-icon-wrap" id="tabwrap-resumen">
+      <span class="tab-icon">🏠</span>
+    </span>
+    <span class="tab-label">Inicio</span>
   </button>
   <button class="tab" onclick="switchTab('finanzas')" id="tab-finanzas">
-    <span class="tab-icon">💰</span>FINANZAS
+    <span class="tab-icon-wrap" id="tabwrap-finanzas">
+      <span class="tab-icon">💰</span>
+    </span>
+    <span class="tab-label">Finanzas</span>
+  </button>
+  <button class="tab" onclick="switchTab('calendar')" id="tab-calendar">
+    <span class="tab-icon-wrap" id="tabwrap-calendar">
+      <span class="tab-icon">📅</span>
+    </span>
+    <span class="tab-label">Turnos</span>
   </button>
   <button class="tab" onclick="switchTab('estadisticas')" id="tab-estadisticas">
-    <span class="tab-icon">📈</span>STATS
+    <span class="tab-icon-wrap" id="tabwrap-estadisticas">
+      <span class="tab-icon">📈</span>
+    </span>
+    <span class="tab-label">Stats</span>
   </button>
   <button class="tab" onclick="switchTab('ajustes')" id="tab-ajustes">
-    <span class="tab-icon">⚙️</span>AJUSTES
+    <span class="tab-icon-wrap" id="tabwrap-ajustes">
+      <span class="tab-icon">⚙️</span>
+    </span>
+    <span class="tab-label">Ajustes</span>
   </button>
 </div>
 
@@ -54,27 +74,73 @@
 <!-- SECTION: FINANZAS -->
 <div class="section" id="section-finanzas">
 
-  <!-- Toggle -->
-  <div class="mov-toggle">
-    <button class="mov-toggle-btn active-gastos" id="mov-btn-gastos" onclick="switchMov('gastos')">
-      💸 Gastos
-    </button>
-    <button class="mov-toggle-btn" id="mov-btn-ingresos" onclick="switchMov('ingresos')">
-      💰 Ingresos
-    </button>
-    <button class="mov-toggle-btn" id="mov-btn-ahorros" onclick="switchMov('ahorros')">
-      🏦 Ahorros
-    </button>
-    <button class="mov-toggle-btn" id="mov-btn-deudas" onclick="switchMov('deudas')">
-      💳 Deudas
-    </button>
-    <button class="mov-toggle-btn" id="mov-btn-descuentos" onclick="switchMov('descuentos')">
-      ✂️ Desctos
-    </button>
+  <!-- MENÚ PRINCIPAL FINANZAS -->
+  <div id="fin-menu" style="display:block">
+    <div style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px">Finanzas</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:20px">Gestiona tus movimientos</div>
+
+    <div class="fin-menu-item" onclick="openFinPanel('gastos')">
+      <div class="fin-menu-icon" style="background:rgba(239,68,68,0.15)">💸</div>
+      <div class="fin-menu-info">
+        <div class="fin-menu-title">Gastos</div>
+        <div class="fin-menu-sub">Compras, servicios, alimentación</div>
+      </div>
+      <div id="fin-val-gastos" class="fin-menu-val" style="color:#f87171"></div>
+      <div class="fin-menu-arrow">›</div>
+    </div>
+
+    <div class="fin-menu-item" onclick="openFinPanel('ingresos')">
+      <div class="fin-menu-icon" style="background:rgba(16,185,129,0.15)">💰</div>
+      <div class="fin-menu-info">
+        <div class="fin-menu-title">Ingresos</div>
+        <div class="fin-menu-sub">Salario, extras, bonificaciones</div>
+      </div>
+      <div id="fin-val-ingresos" class="fin-menu-val" style="color:#6ee7b7"></div>
+      <div class="fin-menu-arrow">›</div>
+    </div>
+
+    <div class="fin-menu-item" onclick="openFinPanel('ahorros')">
+      <div class="fin-menu-icon" style="background:rgba(59,130,246,0.15)">🏦</div>
+      <div class="fin-menu-info">
+        <div class="fin-menu-title">Ahorros</div>
+        <div class="fin-menu-sub">Metas y aportes</div>
+      </div>
+      <div id="fin-val-ahorros" class="fin-menu-val" style="color:#60a5fa"></div>
+      <div class="fin-menu-arrow">›</div>
+    </div>
+
+    <div class="fin-menu-item" onclick="openFinPanel('deudas')">
+      <div class="fin-menu-icon" style="background:rgba(239,68,68,0.12)">💳</div>
+      <div class="fin-menu-info">
+        <div class="fin-menu-title">Deudas</div>
+        <div class="fin-menu-sub">Préstamos, cuotas, tarjetas</div>
+      </div>
+      <div id="fin-val-deudas" class="fin-menu-val" style="color:#fca5a5"></div>
+      <div class="fin-menu-arrow">›</div>
+    </div>
+
+    <div class="fin-menu-item" onclick="openFinPanel('descuentos')">
+      <div class="fin-menu-icon" style="background:rgba(168,85,247,0.15)">✂️</div>
+      <div class="fin-menu-info">
+        <div class="fin-menu-title">Descuentos</div>
+        <div class="fin-menu-sub">Nómina, embargos, retenciones</div>
+      </div>
+      <div id="fin-val-descuentos" class="fin-menu-val" style="color:#c084fc"></div>
+      <div class="fin-menu-arrow">›</div>
+    </div>
+  </div>
+
+  <!-- SUB-PANELES -->
+  <div id="fin-panel" style="display:none">
+    <div class="sub-panel-header">
+      <button class="sub-panel-back" onclick="closeFinPanel()">‹</button>
+      <div class="sub-panel-title" id="fin-panel-title">Gastos</div>
+    </div>
+    <div id="fin-panel-content"></div>
   </div>
 
   <!-- SUB-PANEL: GASTOS -->
-  <div id="mov-gastos">
+  <div id="mov-gastos" style="display:none">
     <div class="expense-form">
       <div class="form-title">➕ Agregar Gasto</div>
       <div class="form-row" style="margin-bottom:10px">
@@ -326,6 +392,19 @@
 <!-- SECTION: AJUSTES -->
 <div class="section" id="section-ajustes">
 
+  <!-- Nombre del usuario -->
+  <div class="s-card-full" style="margin-bottom:14px">
+    <div class="card-label" style="color:#a5b4fc;margin-bottom:10px">👤 Tu nombre</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input class="form-input" id="user-name-input" type="text" placeholder="ej. Kevin, María..."
+        style="flex:1;margin:0" />
+      <button onclick="saveUserName()"
+        style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;
+               border-radius:10px;padding:10px 16px;font-size:12px;font-weight:600;cursor:pointer;
+               font-family:'Outfit',sans-serif;white-space:nowrap">Guardar</button>
+    </div>
+  </div>
+
   <!-- Notificaciones -->
   <div class="s-card-full" style="margin-bottom:14px">
     <div style="display:flex;align-items:center;justify-content:space-between">
@@ -390,6 +469,20 @@
         <div style="font-size:11px;color:#64748b;margin-top:3px">Resumen financiero del mes actual</div>
       </div>
       <div style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;
+        border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600">Exportar</div>
+    </div>
+  </div>
+
+  <!-- Exportar PDF Declaración de Renta -->
+  <div class="s-card-full" style="margin-bottom:14px;cursor:pointer;position:relative;overflow:hidden"
+    onclick="exportRentaPDF()">
+    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#f59e0b,#fbbf24,transparent)"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div class="card-label" style="color:#fbbf24">🇨🇴 Reporte Declaración de Renta</div>
+        <div style="font-size:11px;color:#64748b;margin-top:3px">Resumen anual · Formulario 210 DIAN</div>
+      </div>
+      <div style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#fbbf24;
         border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600">Exportar</div>
     </div>
   </div>
