@@ -79,16 +79,6 @@
     <div style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px">Finanzas</div>
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:20px">Gestiona tus movimientos</div>
 
-    <div class="fin-menu-item" onclick="openFinPanel('gastos')">
-      <div class="fin-menu-icon" style="background:rgba(239,68,68,0.15)">💸</div>
-      <div class="fin-menu-info">
-        <div class="fin-menu-title">Gastos</div>
-        <div class="fin-menu-sub">Compras, servicios, alimentación</div>
-      </div>
-      <div id="fin-val-gastos" class="fin-menu-val" style="color:#f87171"></div>
-      <div class="fin-menu-arrow">›</div>
-    </div>
-
     <div class="fin-menu-item" onclick="openFinPanel('ingresos')">
       <div class="fin-menu-icon" style="background:rgba(16,185,129,0.15)">💰</div>
       <div class="fin-menu-info">
@@ -96,6 +86,16 @@
         <div class="fin-menu-sub">Salario, extras, bonificaciones</div>
       </div>
       <div id="fin-val-ingresos" class="fin-menu-val" style="color:#6ee7b7"></div>
+      <div class="fin-menu-arrow">›</div>
+    </div>
+
+    <div class="fin-menu-item" onclick="openFinPanel('gastos')">
+      <div class="fin-menu-icon" style="background:rgba(239,68,68,0.15)">💸</div>
+      <div class="fin-menu-info">
+        <div class="fin-menu-title">Gastos</div>
+        <div class="fin-menu-sub">Compras, servicios, alimentación</div>
+      </div>
+      <div id="fin-val-gastos" class="fin-menu-val" style="color:#f87171"></div>
       <div class="fin-menu-arrow">›</div>
     </div>
 
@@ -109,25 +109,7 @@
       <div class="fin-menu-arrow">›</div>
     </div>
 
-    <div class="fin-menu-item" onclick="openFinPanel('deudas')">
-      <div class="fin-menu-icon" style="background:rgba(239,68,68,0.12)">💳</div>
-      <div class="fin-menu-info">
-        <div class="fin-menu-title">Deudas</div>
-        <div class="fin-menu-sub">Préstamos, cuotas, tarjetas</div>
-      </div>
-      <div id="fin-val-deudas" class="fin-menu-val" style="color:#fca5a5"></div>
-      <div class="fin-menu-arrow">›</div>
-    </div>
 
-    <div class="fin-menu-item" onclick="openFinPanel('descuentos')">
-      <div class="fin-menu-icon" style="background:rgba(168,85,247,0.15)">✂️</div>
-      <div class="fin-menu-info">
-        <div class="fin-menu-title">Descuentos</div>
-        <div class="fin-menu-sub">Nómina, embargos, retenciones</div>
-      </div>
-      <div id="fin-val-descuentos" class="fin-menu-val" style="color:#c084fc"></div>
-      <div class="fin-menu-arrow">›</div>
-    </div>
   </div>
 
   <!-- SUB-PANELES -->
@@ -201,7 +183,7 @@
       <div class="form-row">
         <div class="form-group" style="flex:2">
           <label class="form-label">Descripción</label>
-          <input class="form-input" id="inc-name" type="text" placeholder="ej. Horas extras, bono..." />
+          <input class="form-input" id="inc-name" type="text" placeholder="ej. Bono, comisión u otro ingreso..." />
         </div>
         <div class="form-group" style="flex:1">
           <label class="form-label">Frecuencia</label>
@@ -229,6 +211,43 @@
       <button class="btn-add" onclick="addIncome()" style="width:100%;background:linear-gradient(135deg,#065f46,#10b981)">Agregar Ingreso</button>
     </div>
     <div id="income-list-content"></div>
+  </div>
+
+  <!-- SUB-PANEL: EXTRAS Y RECARGOS -->
+  <div id="mov-recargos" style="display:none">
+    <div class="expense-form" style="border-color:rgba(245,158,11,0.2)">
+      <div class="form-title" style="color:#fbbf24">⏰ Agregar Extra o Recargo</div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1">
+          <label class="form-label">Tipo</label>
+          <select class="form-select" id="extra-type" onchange="updateExtraUnit()">
+            <option value="overtime">⏰ Hora extra</option>
+            <option value="nocturnal">🌙 Recargo nocturno</option>
+            <option value="holiday">🎉 Trabajo festivo</option>
+            <option value="sunday">📅 Domingo trabajado</option>
+            <option value="other">➕ Otro</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1">
+          <label class="form-label" id="extra-qty-label">Cantidad (horas)</label>
+          <input class="form-input" id="extra-qty" type="number" placeholder="1" min="0.5" step="0.5" inputmode="decimal" />
+        </div>
+        <div class="form-group" style="flex:1">
+          <label class="form-label" id="extra-unit-label">Valor por hora ($)</label>
+          <input class="form-input" id="extra-unit" type="number" placeholder="0" inputmode="numeric" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1">
+          <label class="form-label">Descripción (opcional)</label>
+          <input class="form-input" id="extra-desc" type="text" placeholder="ej. Turno extra del 15..." />
+        </div>
+      </div>
+      <button class="btn-add" onclick="addExtra()" style="width:100%;background:linear-gradient(135deg,#92400e,#f59e0b)">Agregar Extra o Recargo</button>
+    </div>
+    <div id="recargos-list-content"></div>
   </div>
 
   <!-- SUB-PANEL: AHORROS -->
@@ -445,48 +464,6 @@
     <div id="ctrl-start-label" style="font-size:11px;color:#6366f1;margin-top:8px;font-weight:600"></div>
   </div>
 
-  <!-- Tarjeta Sueldo -->
-  <div class="s-card-full" style="margin-bottom:14px;cursor:pointer;position:relative;overflow:hidden"
-    onclick="openSalaryModal()">
-    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#6366f1,#818cf8,transparent)"></div>
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <div>
-        <div class="card-label" style="color:#a5b4fc">💰 Configuración de sueldo</div>
-        <div id="sal-current-label" style="font-size:11px;color:#64748b;margin-top:3px">Sin sueldo configurado</div>
-      </div>
-      <div style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;
-        border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600">Configurar</div>
-    </div>
-  </div>
-
-  <!-- Exportar PDF -->
-  <div class="s-card-full" style="margin-bottom:14px;cursor:pointer;position:relative;overflow:hidden"
-    onclick="exportPDF()">
-    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#6366f1,#a855f7,transparent)"></div>
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <div>
-        <div class="card-label" style="color:#a5b4fc">📄 Exportar Reporte PDF</div>
-        <div style="font-size:11px;color:#64748b;margin-top:3px">Resumen financiero del mes actual</div>
-      </div>
-      <div style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;
-        border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600">Exportar</div>
-    </div>
-  </div>
-
-  <!-- Exportar PDF Declaración de Renta -->
-  <div class="s-card-full" style="margin-bottom:14px;cursor:pointer;position:relative;overflow:hidden"
-    onclick="exportRentaPDF()">
-    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#f59e0b,#fbbf24,transparent)"></div>
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <div>
-        <div class="card-label" style="color:#fbbf24">🇨🇴 Reporte Declaración de Renta</div>
-        <div style="font-size:11px;color:#64748b;margin-top:3px">Resumen anual · Formulario 210 DIAN</div>
-      </div>
-      <div style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#fbbf24;
-        border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600">Exportar</div>
-    </div>
-  </div>
-
   <!-- Tarjeta Turno -->
   <div class="s-card-full" style="margin-bottom:14px;cursor:pointer;position:relative;overflow:hidden"
     onclick="openScheduleModal()">
@@ -592,6 +569,7 @@
 
 <!-- SCRIPTS (orden importante: config primero, app al final) -->
 <script src="./js/config.js"></script>
+<script src="./js/finance/financeStorage.js"></script>
 <script src="./js/app.js"></script>
 <script src="./js/pwa.js"></script>
 

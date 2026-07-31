@@ -43,7 +43,7 @@ body {
 ══════════════════════════════════════════ */
 .app-header {
   background: var(--bg-mid);
-  padding: 52px 20px 18px;
+  padding: 44px 16px 12px;
   border-bottom: 1px solid var(--border);
   position: relative;
   overflow: hidden;
@@ -51,34 +51,22 @@ body {
 .app-header::before {
   content: '';
   position: absolute;
-  top: -80px; left: 30%;
-  width: 280px; height: 180px;
-  background: radial-gradient(ellipse, rgba(124,111,247,0.18) 0%, transparent 70%);
+  top: -60px; left: 30%;
+  width: 200px; height: 130px;
+  background: radial-gradient(ellipse, rgba(124,111,247,0.15) 0%, transparent 70%);
   pointer-events: none;
 }
 .header-greeting {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-soft);
   font-weight: 400;
-  margin-bottom: 2px;
-}
-.header-name {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: -0.3px;
-}
-.header-sub {
-  font-size: 11px;
-  letter-spacing: 3px;
-  color: var(--accent);
-  text-transform: uppercase;
-  font-weight: 600;
+  margin-bottom: 1px;
 }
 .header-title {
-  font-family: 'DM Serif Display', serif;
-  font-size: 26px;
-  background: linear-gradient(90deg, #a5b4fc, #c4b5fd, #f0abfc);
+  font-family: 'Outfit', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #a5b4fc, #c4b5fd);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   line-height: 1.2;
@@ -86,16 +74,15 @@ body {
 .header-top-row {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
 }
 .header-notif-btn {
   background: var(--bg-card2);
   border: 1px solid var(--border);
   border-radius: 50%;
-  width: 38px; height: 38px;
+  width: 34px; height: 34px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 16px; cursor: pointer; color: var(--text-soft);
-  margin-top: 4px;
+  font-size: 14px; cursor: pointer; color: var(--text-soft);
 }
 .install-btn {
   display: none; margin-top: 10px;
@@ -824,4 +811,114 @@ body {
   .pdf-table-section .pdf-exp-row { padding: 5px 0; }
   .pdf-table-section .pdf-exp-name { font-size: 11px; color: #374151; flex: 1; }
   .pdf-table-section .pdf-exp-amt  { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600; white-space: nowrap; }
+}
+
+/* =====================================================
+   FLUXO — Modal de confirmación para eliminaciones
+   ===================================================== */
+.fluxo-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(2, 6, 23, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .18s ease, visibility .18s ease;
+}
+
+.fluxo-confirm-overlay.open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.fluxo-confirm-card {
+  width: min(100%, 360px);
+  padding: 24px 20px 20px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(10, 15, 30, 0.98));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(99, 102, 241, 0.06);
+  transform: translateY(10px) scale(.97);
+  transition: transform .18s ease;
+  text-align: center;
+}
+
+.fluxo-confirm-overlay.open .fluxo-confirm-card {
+  transform: translateY(0) scale(1);
+}
+
+.fluxo-confirm-icon {
+  width: 54px;
+  height: 54px;
+  margin: 0 auto 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  font-size: 24px;
+}
+
+.fluxo-confirm-title {
+  color: #f8fafc;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -.2px;
+}
+
+.fluxo-confirm-message {
+  margin: 8px auto 20px;
+  max-width: 300px;
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.fluxo-confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.fluxo-confirm-btn {
+  min-height: 44px;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform .15s ease, opacity .15s ease, background .15s ease;
+}
+
+.fluxo-confirm-btn:active {
+  transform: scale(.97);
+}
+
+.fluxo-confirm-cancel {
+  color: #cbd5e1;
+  background: rgba(51, 65, 85, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.fluxo-confirm-cancel:hover {
+  background: rgba(71, 85, 105, 0.65);
+}
+
+.fluxo-confirm-delete {
+  color: #fff;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  box-shadow: 0 8px 22px rgba(239, 68, 68, 0.18);
+}
+
+.fluxo-confirm-delete:hover {
+  opacity: .92;
 }
