@@ -26,22 +26,7 @@ const SHIFTS = {
 };
 
 // ── Claves de localStorage ────────────────────────────────
-const OV_KEY        = 'turnos_ov2';
-const EXP_KEY       = 'turnos_exp';
-const EXP_MONTH_KEY = 'turnos_exp_m';
-const DISC_KEY      = 'turnos_disc';
-const DISC_MON_KEY  = 'turnos_disc_m';
-const ACCUM_KEY     = 'turnos_accum';
-const INC_KEY       = 'turnos_inc';
-const INC_MONTH_KEY = 'turnos_inc_m';
-const DEBT_KEY      = 'turnos_debts';
-const SAVINGS_KEY   = 'turnos_savings';
-const SAVINGS_EVENTS_KEY = 'turnos_savings_events';
-const SAVINGS_SPENT_KEY = 'turnos_savings_spent';
-const CTRL_KEY      = 'turnos_control_start';
-const SCHED_KEY     = 'turnos_schedule';
-const SALARY_KEY    = 'turnos_salary';
-const EXTRAS_KEY    = 'turnos_extras';
+// Las claves y los valores predeterminados viven en FinanceStorage.
 
 // ── Estado global ─────────────────────────────────────────
 const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -50,21 +35,22 @@ let M = today.getMonth();
 let selKey = null;
 
 // ── Datos persistidos ─────────────────────────────────────
-let overrides      = JSON.parse(localStorage.getItem(OV_KEY)        || '{}');
-let expenses       = JSON.parse(localStorage.getItem(EXP_KEY)       || '[]');
-let monthExpenses  = JSON.parse(localStorage.getItem(EXP_MONTH_KEY) || '{}');
-let discounts      = JSON.parse(localStorage.getItem(DISC_KEY)      || '[]');
-let discountMonths = JSON.parse(localStorage.getItem(DISC_MON_KEY)  || '{}');
-let accumBalances  = JSON.parse(localStorage.getItem(ACCUM_KEY)     || '{}');
-let incomes        = JSON.parse(localStorage.getItem(INC_KEY)       || '[]');
-let monthIncomes   = JSON.parse(localStorage.getItem(INC_MONTH_KEY) || '{}');
-let debts          = JSON.parse(localStorage.getItem(DEBT_KEY)      || '[]');
-let savings        = JSON.parse(localStorage.getItem(SAVINGS_KEY)   || '[]');
-let savingsEvents  = JSON.parse(localStorage.getItem(SAVINGS_EVENTS_KEY) || '[]');
-let savingsSpent   = JSON.parse(localStorage.getItem(SAVINGS_SPENT_KEY) || '[]');
+const storedState = FinanceStorage.loadAppState();
+let overrides      = storedState.overrides;
+let expenses       = storedState.expenses;
+let monthExpenses  = storedState.monthExpenses;
+let discounts      = storedState.discounts;
+let discountMonths = storedState.discountMonths;
+let accumBalances  = storedState.accumBalances;
+let incomes        = storedState.incomes;
+let monthIncomes   = storedState.monthIncomes;
+let debts          = storedState.debts;
+let savings        = storedState.savings;
+let savingsEvents  = storedState.savingsEvents;
+let savingsSpent   = storedState.savingsSpent;
 
 // Mes de inicio de control (null = sin restricción)
-let controlStart   = JSON.parse(localStorage.getItem(CTRL_KEY) || 'null');
+let controlStart   = storedState.controlStart;
 
 // Configuración de turno y sueldo
 // schedule = {
@@ -76,7 +62,7 @@ let controlStart   = JSON.parse(localStorage.getItem(CTRL_KEY) || 'null');
 //   -- office --
 //   officeDays: { 1:8, 2:8, 3:8, 4:8, 5:8, 6:4 }, // 0=dom..6=sab, value=hours
 // }
-let schedule = JSON.parse(localStorage.getItem(SCHED_KEY) || 'null');
+let schedule = storedState.schedule;
 
 // Configuración de sueldo
 // salary = {
@@ -90,42 +76,31 @@ let schedule = JSON.parse(localStorage.getItem(SCHED_KEY) || 'null');
 //   fixedType: 'monthly' | 'quincenal',
 //   fixedAmount: 3000000,    // monto fijo (mensual o por quincena)
 // }
-let salary = JSON.parse(localStorage.getItem(SALARY_KEY) || 'null');
+let salary = storedState.salary;
 
 // Extras del mes { 'YYYY-MM': [{ id, type, qty, unitValue, desc }] }
-let monthExtras = JSON.parse(localStorage.getItem(EXTRAS_KEY) || '{}');
+let monthExtras = storedState.monthExtras;
 
 // Migración: asignar startY/startM a registros viejos que no lo tienen
-(function migrateDates() {
-  let changed = false;
-  debts.forEach(d => {
-    if (d.startY == null) { d.startY = today.getFullYear(); d.startM = today.getMonth(); changed = true; }
-  });
-  if (changed) localStorage.setItem(DEBT_KEY, JSON.stringify(debts));
-  changed = false;
-  savings.forEach(s => {
-    if (s.startY == null) { s.startY = today.getFullYear(); s.startM = today.getMonth(); changed = true; }
-  });
-  if (changed) localStorage.setItem(SAVINGS_KEY, JSON.stringify(savings));
-})();
+FinanceStorage.migrateStartDates({ debts, savings }, today);
 
 // ── Funciones de guardado ─────────────────────────────────
-function save()        { localStorage.setItem(OV_KEY,        JSON.stringify(overrides)); }
-function saveExp()     { localStorage.setItem(EXP_KEY,       JSON.stringify(expenses)); }
-function saveMonthExp(){ localStorage.setItem(EXP_MONTH_KEY, JSON.stringify(monthExpenses)); }
-function saveDisc()    { localStorage.setItem(DISC_KEY,      JSON.stringify(discounts)); }
-function saveDiscMon() { localStorage.setItem(DISC_MON_KEY,  JSON.stringify(discountMonths)); }
-function saveAccum()   { localStorage.setItem(ACCUM_KEY,     JSON.stringify(accumBalances)); }
-function saveInc()     { localStorage.setItem(INC_KEY,       JSON.stringify(incomes)); }
-function saveMonthInc(){ localStorage.setItem(INC_MONTH_KEY, JSON.stringify(monthIncomes)); }
-function saveDebts()   { localStorage.setItem(DEBT_KEY,      JSON.stringify(debts)); }
-function saveSavings()     { localStorage.setItem(SAVINGS_KEY, JSON.stringify(savings)); }
-function saveSavingsEvents(){ localStorage.setItem(SAVINGS_EVENTS_KEY, JSON.stringify(savingsEvents)); }
-function saveSavingsSpent(){ localStorage.setItem(SAVINGS_SPENT_KEY, JSON.stringify(savingsSpent)); }
-function saveControlStart() { localStorage.setItem(CTRL_KEY,   JSON.stringify(controlStart)); }
-function saveSchedule()   { localStorage.setItem(SCHED_KEY,  JSON.stringify(schedule)); }
-function saveSalary()    { localStorage.setItem(SALARY_KEY, JSON.stringify(salary)); }
-function saveExtras()    { localStorage.setItem(EXTRAS_KEY, JSON.stringify(monthExtras)); }
+function save()        { FinanceStorage.saveAppValue('overrides', overrides); }
+function saveExp()     { FinanceStorage.saveAppValue('expenses', expenses); }
+function saveMonthExp(){ FinanceStorage.saveAppValue('monthExpenses', monthExpenses); }
+function saveDisc()    { FinanceStorage.saveAppValue('discounts', discounts); }
+function saveDiscMon() { FinanceStorage.saveAppValue('discountMonths', discountMonths); }
+function saveAccum()   { FinanceStorage.saveAppValue('accumBalances', accumBalances); }
+function saveInc()     { FinanceStorage.saveAppValue('incomes', incomes); }
+function saveMonthInc(){ FinanceStorage.saveAppValue('monthIncomes', monthIncomes); }
+function saveDebts()   { FinanceStorage.saveAppValue('debts', debts); }
+function saveSavings() { FinanceStorage.saveAppValue('savings', savings); }
+function saveSavingsEvents(){ FinanceStorage.saveAppValue('savingsEvents', savingsEvents); }
+function saveSavingsSpent(){ FinanceStorage.saveAppValue('savingsSpent', savingsSpent); }
+function saveControlStart() { FinanceStorage.saveAppValue('controlStart', controlStart); }
+function saveSchedule() { FinanceStorage.saveAppValue('schedule', schedule); }
+function saveSalary() { FinanceStorage.saveAppValue('salary', salary); }
+function saveExtras() { FinanceStorage.saveAppValue('monthExtras', monthExtras); }
 
 // ── Utilidades de fecha ───────────────────────────────────
 function key(y, m, d)  { return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`; }

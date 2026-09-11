@@ -1,5 +1,34 @@
 // ═══════════════════════════════════════════════════════
+// MOVEMENT DATE HELPERS — FASE 2A
+// ═══════════════════════════════════════════════════════
+// Normaliza fechas de movimientos a YYYY-MM-DD sin cambiar todavía
+// la estructura financiera existente. Los campos day/day2 siguen
+// siendo compatibles y continúan siendo la fuente actual de cálculo.
+function fluxoMovementDate(year, month, day) {
+  const y = Number(year);
+  const m = Number(month);
+  const d = Number(day);
+  if (!Number.isInteger(y) || !Number.isInteger(m) || m < 0 || m > 11 ||
+      !Number.isInteger(d) || d < 1 || d > 31) return null;
+  const maxDay = new Date(y, m + 1, 0).getDate();
+  if (d > maxDay) return null;
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
 
+function fluxoMovementDateLabel(year, month, day) {
+  const key = fluxoMovementDate(year, month, day);
+  if (!key) return '';
+  const d = new Date(`${key}T12:00:00`);
+  return new Intl.DateTimeFormat('es-CO', {
+    day: 'numeric', month: 'long', year: 'numeric'
+  }).format(d);
+}
+
+// Expone la utilidad para las siguientes fases (calendario/reportes).
+window.FluxoMovementDate = {
+  key: fluxoMovementDate,
+  label: fluxoMovementDateLabel
+};
 
 
 // ── Migración: asignar startY/startM a registros sin fecha ──────────
@@ -10,12 +39,12 @@
   savings.forEach(s => {
     if (s.startY == null || s.startY === 0) { s.startY = todayY; s.startM = todayM; sc = true; }
   });
-  if (sc) FinanceStorage.setRaw('turnos_savings', JSON.stringify(savings));
+  if (sc) FinanceStorage.saveAppValue('savings', savings);
   let dc = false;
   debts.forEach(d => {
     if (d.startY == null || d.startY === 0) { d.startY = todayY; d.startM = todayM; dc = true; }
   });
-  if (dc) FinanceStorage.setRaw('turnos_debts', JSON.stringify(debts));
+  if (dc) FinanceStorage.saveAppValue('debts', debts);
 })();
 
 // INIT HEADER
@@ -178,41 +207,7 @@ function toast(msg) {
 // EXPENSES HELPERS
 // ═══════════════════════════════════════════════════════
 function getMonthExpenses(y, m) {
-  const totalDays = dim(y, m);
-  const mk = monthKey(y, m);
-  const allExp = [
-    ...expenses.map(e => ({ ...e, _src: 'global' })),
-    ...((monthExpenses[mk]) || []).map(e => ({ ...e, _src: 'month' }))
-  ];
-  let total = 0;
-  const items = [];
-  allExp.forEach(exp => {
-    const srcLabel = exp._src === 'month' ? `Solo ${MONTHS[m]} ${y}` : null;
-    if (exp.type === 'monthly') {
-      total += exp.amount;
-      items.push({ ...exp, appliedAmount: exp.amount, note: srcLabel || `Día ${exp.day} · mensual` });
-    } else if (exp.type === 'quincenal') {
-      // Q1
-      const d1 = parseInt(exp.day);
-      if (d1 >= 1 && d1 <= 15) {
-        total += exp.amount;
-        items.push({ ...exp, appliedAmount: exp.amount, note: srcLabel || `Día ${d1} · Q1` });
-      }
-      // Q2
-      const d2 = parseInt(exp.day2);
-      if (d2 >= 16 && d2 <= totalDays) {
-        total += exp.amount;
-        items.push({ ...exp, id: exp.id + '_q2', appliedAmount: exp.amount, note: srcLabel || `Día ${d2} · Q2` });
-      }
-    } else { // daily
-      const d = parseInt(exp.day);
-      if (d >= 1 && d <= totalDays) {
-        total += exp.amount;
-        items.push({ ...exp, appliedAmount: exp.amount, note: srcLabel || `Día ${d} · diario` });
-      }
-    }
-  });
-  return { total, items };
+  return FinanceCalculator.getRecurringItems(expenses, monthExpenses[monthKey(y, m)], y, m, dim(y, m), MONTHS[m]);
 }
 
 function hasDayExpense(y, m, d) {
@@ -223,54 +218,14 @@ function hasDayExpense(y, m, d) {
 // INCOME HELPERS
 // ═══════════════════════════════════════════════════════
 function getMonthIncomes(y, m) {
-  const totalDays = dim(y, m);
-  const mk = monthKey(y, m);
-  const allInc = [
-    ...incomes.map(i => ({ ...i, _src: 'global' })),
-    ...((monthIncomes[mk]) || []).map(i => ({ ...i, _src: 'month' }))
-  ];
-  let total = 0;
-  const items = [];
-  allInc.forEach(inc => {
-    const srcLabel = inc._src === 'month' ? `Solo ${MONTHS[m]} ${y}` : null;
-    if (inc.type === 'monthly') {
-      total += inc.amount;
-      items.push({ ...inc, appliedAmount: inc.amount, note: srcLabel || `Día ${inc.day} · mensual` });
-    } else if (inc.type === 'quincenal') {
-      const d1 = parseInt(inc.day);
-      if (d1 >= 1 && d1 <= 15) {
-        total += inc.amount;
-        items.push({ ...inc, appliedAmount: inc.amount, note: srcLabel || `Día ${d1} · Q1` });
-      }
-      const d2 = parseInt(inc.day2);
-      if (d2 >= 16 && d2 <= totalDays) {
-        total += inc.amount;
-        items.push({ ...inc, id: inc.id + '_q2', appliedAmount: inc.amount, note: srcLabel || `Día ${d2} · Q2` });
-      }
-    } else {
-      const d = parseInt(inc.day);
-      if (d >= 1 && d <= totalDays) {
-        total += inc.amount;
-        items.push({ ...inc, appliedAmount: inc.amount, note: srcLabel || `Día ${d} · diario` });
-      }
-    }
-  });
-  return { total, items };
+  return FinanceCalculator.getRecurringItems(incomes, monthIncomes[monthKey(y, m)], y, m, dim(y, m), MONTHS[m]);
 }
 
 // ═══════════════════════════════════════════════════════
 // DEBT HELPERS
 // ═══════════════════════════════════════════════════════
 function getMonthDebtPayment(y, m) {
-  // Suma las cuotas de deudas activas (con saldo pendiente) en el mes dado
-  let total = 0;
-  debts.forEach(d => {
-    const pending = d.total - (d.paid || 0);
-    if (pending <= 0) return; // saldada
-    total += d.cuota;
-    if (d.freq === 'quincenal') total += d.cuota; // dos cuotas al mes
-  });
-  return total;
+  return FinanceCalculator.getRecordedDebtPayment(debts, monthKey(y, m));
 }
 
 // ═══════════════════════════════════════════════════════
@@ -336,28 +291,20 @@ function getFirstDataMonth() {
 }
 
 function getAccumulatedBalance(y, m) {
-  const first = getFirstDataMonth();
-  if (!first) return 0;
+  const result = FinanceEngine.computeAccumulated(y, m, {
+    getFirstDataMonth,
+    monthKey,
+    calcMonth
+  });
 
-  const targetIdx = Number(y) * 12 + Number(m);
-  const firstIdx = Number(first.y) * 12 + Number(first.m);
-  if (targetIdx < firstIdx) return 0;
+  if (result === null) return 0;
 
-  let cy = first.y, cm = first.m;
-  let accum = 0;
-
-  while ((cy * 12 + cm) <= targetIdx) {
-    const mk = monthKey(cy, cm);
-    const c = calcMonth(cy, cm);
-    accum += Number(c.balance) || 0;
-    accumBalances[mk] = accum;
-
-    cm++;
-    if (cm > 11) { cm = 0; cy++; }
-  }
+  result.balances.forEach(({ mk, value }) => {
+    accumBalances[mk] = value;
+  });
 
   saveAccum();
-  return accum;
+  return result.accumulated;
 }
 
 function getPrevAccumulated(y, m) {
@@ -368,80 +315,15 @@ function getPrevAccumulated(y, m) {
 
 // ── Ahorros: saldo histórico del período ───────────────────────────
 function getSavedAmountAt(y, m) {
-  const targetIdx = Number(y) * 12 + Number(m);
-  let total = 0;
-
-  savings.forEach(s => {
-    const sy = (s.startY != null && s.startY > 0) ? Number(s.startY) : today.getFullYear();
-    const sm = (s.startM != null && s.startY != null && s.startY > 0)
-      ? Number(s.startM)
-      : today.getMonth();
-    const startIdx = sy * 12 + sm;
-
-    // Una meta no existe antes de su creación.
-    if (targetIdx < startIdx) return;
-
-    // Si fue cumplida, desde el mes de cumplimiento deja de formar parte
-    // de los ahorros activos porque se entiende que el dinero fue utilizado.
-    if (s.completed && s.completedY != null && s.completedM != null) {
-      const completedIdx = Number(s.completedY) * 12 + Number(s.completedM);
-      if (targetIdx >= completedIdx) return;
-    }
-
-    let saved = 0;
-
-    // El saldo inicial existe desde el mes de creación, pero nunca cuenta
-    // como aporte del mes.
-    const initialPayment = (s.payments || []).find(p => p.initial);
-    if (initialPayment) saved += Number(initialPayment.amount) || 0;
-    else if (s.initialBalance != null) saved += Number(s.initialBalance) || 0;
-
-    // Aportes y retiros posteriores se aplican hasta el mes consultado.
-    (s.payments || []).forEach(p => {
-      if (!p || p.initial) return;
-      const py = p.y != null ? Number(p.y) : null;
-      const pm = p.m != null ? Number(p.m) : null;
-      const pIdx = (py != null && pm != null)
-        ? py * 12 + pm
-        : (p.mk ? (() => {
-            const parts = String(p.mk).split('-').map(Number);
-            return parts.length === 2 ? parts[0] * 12 + (parts[1] - 1) : null;
-          })() : null);
-
-      if (pIdx == null || pIdx > targetIdx) return;
-
-      const amount = Number(p.amount) || 0;
-      if (p.type === 'withdrawal' || p.kind === 'withdrawal' ||
-          p.type === 'retiro' || p.kind === 'retiro') {
-        saved -= amount;
-      } else {
-        saved += amount;
-      }
-    });
-
-    total += Math.max(0, saved);
-  });
-
-  return Math.max(0, total);
-}
-
-function getTotalSavedAmount() {
-  return getSavedAmountAt(Y, M);
-}
-
-// El saldo disponible representa el dinero financiero no apartado.
-// El Saldo Total/Patrimonio suma nuevamente el dinero que está en metas.
-function getAvailableBalance(y, m) {
-  return getAccumulatedBalance(y, m);
-}
-
-function getTotalWealth(y, m) {
-  return getAvailableBalance(y, m) + getSavedAmountAt(y, m);
+  return FinanceCalculator.getSavingsTotalAt(savings, y, m);
 }
 
 // ── Ahorros: desglose del patrimonio disponible ─────────────────────
 function getTotalSavedAmount() {
-  return savings.filter(s => !s.completed).reduce((sum, s) => sum + (Number(s.saved) || 0), 0);
+  return FinanceEngine.getTotalSavedAmount(
+    { y: Y, m: M },
+    { getSavedAmountAt }
+  );
 }
 
 // El saldo disponible es el acumulado financiero después de aportes a ahorro
@@ -455,7 +337,19 @@ function getAvailableBalance(y, m) {
 }
 
 function getTotalWealth(y, m) {
-  return getAvailableBalance(y, m) + getTotalSavedAmount();
+  return FinanceEngine.getTotalWealth(
+    y,
+    m,
+    { getAvailableBalance, getSavedAmountAt }
+  );
+}
+
+function getMonthSummary(y, m) {
+  return FinanceEngine.getMonthSummary(y, m, {
+    calcMonth,
+    getAvailableBalance,
+    getSavedAmountAt
+  });
 }
 
 function addSavingsEvent(type, savingName, amount, y = Y, m = M) {
@@ -471,26 +365,13 @@ function addSavingsEvent(type, savingName, amount, y = Y, m = M) {
 // DISCOUNT HELPERS
 // ═══════════════════════════════════════════════════════
 function getMonthDiscData(y, m) {
-  const mk = monthKey(y, m);
-  const md = discountMonths[mk] || { disabled: [], extras: [] };
-  const activeGlobal = discounts.filter(d => !md.disabled.includes(d.id));
-  const extras = md.extras || [];
-  return { activeGlobal, extras, disabled: md.disabled || [], allForMonth: [...activeGlobal, ...extras] };
+  return FinanceCalculator.getDiscountData(discounts, discountMonths[monthKey(y, m)]);
 }
 
 function getMonthDiscounts(y, m) {
   const c = calcMonthEarnings(y, m);
   const { allForMonth } = getMonthDiscData(y, m);
-  let q1disc = 0, q2disc = 0, monthDisc = 0;
-  allForMonth.forEach(d => {
-    if (d.freq === 'quincenal') {
-      q1disc += d.type === 'pct' ? (d.pct / 100) * c.q1earn : d.fixed;
-      q2disc += d.type === 'pct' ? (d.pct / 100) * c.q2earn : d.fixed;
-    } else {
-      monthDisc += d.type === 'pct' ? (d.pct / 100) * c.totalEarn : d.fixed;
-    }
-  });
-  return { q1disc, q2disc, total: q1disc + q2disc + monthDisc, monthDisc };
+  return FinanceCalculator.getDiscountTotals(allForMonth, c);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -622,31 +503,33 @@ function isBeforeControl(y, m) {
 }
 
 function calcMonth(y, m) {
-  if (isBeforeControl(y, m)) {
-    return { q1earn:0, q2earn:0, totalEarn:0, totalHours:0, q1h:0, q2h:0,
-             q1a:0, q2a:0, q1p:0, q2p:0, absentCount:0,
-             expenses:0, discounts:0, incomes:0, debts:0, savingsContrib:0,
-             q1disc:0, q2disc:0, monthDisc:0, balance:0 };
-  }
-  const earn     = calcMonthEarnings(y, m);
-  const expData  = getMonthExpenses(y, m);
-  const discData = getMonthDiscounts(y, m);
-  const incData  = getMonthIncomes(y, m);
-  const debtAmt  = getMonthDebtPayment(y, m);
-  const savAmt   = getMonthSavingsTotal(y, m);
-  const extrasTotal = getMonthExtrasTotal(y, m);
-  const balance  = earn.totalEarn + incData.total + extrasTotal - expData.total - discData.total - debtAmt - savAmt;
-  return {
-    ...earn,
-    expenses:  expData.total,
-    discounts: discData.total,
-    incomes:   incData.total,
-    debts:     debtAmt,
-    savingsContrib: savAmt,
-    extrasTotal,
-    q1disc: discData.q1disc, q2disc: discData.q2disc, monthDisc: discData.monthDisc,
-    balance,
-  };
+  return FinanceEngine.calcMonth(y, m, {
+    isBeforeControl,
+    monthKey,
+    dim,
+    MONTHS,
+    today,
+    salary,
+    schedule,
+    overrides,
+    expenses,
+    monthExpenses,
+    incomes,
+    monthIncomes,
+    discounts,
+    discountMonths,
+    debts,
+    savings,
+    savingsSpent,
+    monthExtras,
+    getMonthExtrasTotal,
+    getMonthSavingsTotal,
+    getMonthDebtPayment,
+    getMonthDiscounts,
+    getMonthIncomes,
+    getMonthExpenses,
+    calcMonthEarnings
+  });
 }
 
 // ═══════════════════════════════════════════════════════
@@ -738,6 +621,8 @@ function renderResumen() {
       allActivity.push({ icon: '🗑️', iconBg: 'rgba(239,68,68,0.15)', name: e.savingName, meta: 'Ahorro eliminado · dinero no disponible', amount: `-${fmt(e.amount)}`, color: '#f87171' });
     } else if (e.type === 'withdraw') {
       allActivity.push({ icon: '↩️', iconBg: 'rgba(16,185,129,0.15)', name: e.savingName, meta: 'Retiro de ahorro · vuelve al disponible', amount: `+${fmt(e.amount)}`, color: '#6ee7b7' });
+    } else if (e.type === 'complete') {
+      allActivity.push({ icon: '🏆', iconBg: 'rgba(239,68,68,0.15)', name: e.savingName, meta: 'Meta cumplida · dinero utilizado', amount: `-${fmt(e.amount)}`, color: '#f87171' });
     }
   });
   // Descuentos del mes
@@ -972,7 +857,153 @@ function renderResumen() {
 // ═══════════════════════════════════════════════════════
 // RENDER: CALENDAR
 // ═══════════════════════════════════════════════════════
+let calendarView = 'shifts';
+let selectedMovementDay = null;
+
+function setCalendarView(view) {
+  calendarView = view === 'movements' ? 'movements' : 'shifts';
+  selectedMovementDay = null;
+  renderCal();
+}
+
+function getMovementDayFromDate(value) {
+  if (!value) return null;
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match || Number(match[1]) !== Y || Number(match[2]) !== M + 1) return null;
+  const day = Number(match[3]);
+  return day >= 1 && day <= dim(Y, M) ? day : null;
+}
+
+function getMovementCalendarData() {
+  const byDay = Array.from({ length: dim(Y, M) + 1 }, () => []);
+  const mk = monthKey(Y, M);
+  const add = (day, movement) => {
+    if (day >= 1 && day < byDay.length) byDay[day].push({ ...movement, day });
+  };
+  const addRecurring = (records, scope, type, icon, sign) => {
+    (records || []).forEach(record => {
+      const addRecord = (day, suffix = '') => add(day, {
+        type, icon, sign, name: record.name || type, amount: Number(record.amount) || 0,
+        date: fluxoMovementDate(Y, M, day), timestamp: record.date || '',
+        description: scope === 'month' ? `${record.name || type} · solo este mes${suffix}` : `${record.name || type}${suffix}`
+      });
+      const storedDateDay = getMovementDayFromDate(record.date || record.createdAt);
+      if (storedDateDay) { addRecord(storedDateDay); return; }
+      if (record.type === 'quincenal') {
+        addRecord(Number(record.day), ' · Q1');
+        addRecord(Number(record.day2), ' · Q2');
+      } else addRecord(Number(record.day));
+    });
+  };
+
+  addRecurring(expenses, 'global', 'Gasto normal', '💸', '-');
+  addRecurring(monthExpenses[mk], 'month', 'Gasto normal', '💸', '-');
+  addRecurring(incomes, 'global', 'Ingreso', '💰', '+');
+  addRecurring(monthIncomes[mk], 'month', 'Ingreso', '💰', '+');
+
+  // Extras y descuentos sólo se muestran si su propio registro ya trae fecha.
+  // No se asigna una fecha artificial a movimientos que históricamente no la tienen.
+  (monthExtras[mk] || []).forEach(extra => {
+    const day = getMovementDayFromDate(extra.date || extra.createdAt);
+    if (day) add(day, { type: 'Extra', icon: '⏰', sign: '+', name: extra.desc || 'Extra',
+      description: extra.desc || 'Extra o recargo', amount: (Number(extra.qty) || 0) * (Number(extra.unitValue) || 0),
+      date: fluxoMovementDate(Y, M, day), timestamp: extra.date || extra.createdAt || '' });
+  });
+
+  const discountData = getMonthDiscData(Y, M);
+  const earnings = calcMonthEarnings(Y, M);
+  discountData.allForMonth.forEach(discount => {
+    const day = getMovementDayFromDate(discount.date || discount.createdAt);
+    if (!day) return;
+    const base = discount.freq === 'quincenal'
+      ? (day <= 15 ? earnings.q1earn : earnings.q2earn) : earnings.totalEarn;
+    const amount = discount.type === 'pct'
+      ? (Number(discount.pct) || 0) / 100 * base : Number(discount.fixed) || 0;
+    add(day, { type: 'Descuento', icon: '✂️', sign: '-', name: discount.name || 'Descuento',
+      description: discount.name || 'Descuento', amount, date: fluxoMovementDate(Y, M, day),
+      timestamp: discount.date || discount.createdAt || '' });
+  });
+
+  debts.forEach(debt => (debt.payments || []).forEach(payment => {
+    if (payment.mk !== mk) return;
+    const day = getMovementDayFromDate(payment.date || payment.createdAt) ||
+      (payment.quincena === 'Q2' ? Number(debt.day2) : Number(debt.day));
+    add(day, { type: 'Pago de deuda', icon: '💳', sign: '-', name: debt.name || 'Deuda',
+      description: `${debt.name || 'Deuda'}${payment.quincena ? ` · ${payment.quincena}` : ''}`,
+      amount: Number(payment.amount) || 0, date: fluxoMovementDate(Y, M, day),
+      timestamp: payment.date || payment.createdAt || '' });
+  }));
+
+  savings.forEach(saving => (saving.payments || []).forEach(payment => {
+    if (payment.mk !== mk || payment.kind === 'withdrawal' || payment.type === 'withdrawal') return;
+    const day = getMovementDayFromDate(payment.date || payment.createdAt) ||
+      (payment.initial ? getMovementDayFromDate(saving.startDate) : null) ||
+      (payment.label === 'Q2' ? Number(saving.day2) : Number(saving.day));
+    add(day, { type: 'Aporte a ahorro', icon: '🏦', sign: '-', name: saving.name || 'Ahorro',
+      description: `${saving.name || 'Ahorro'}${payment.initial ? ' · saldo inicial' : payment.label ? ` · ${payment.label}` : ''}`,
+      amount: Math.abs(Number(payment.amount) || 0), date: fluxoMovementDate(Y, M, day),
+      timestamp: payment.date || payment.createdAt || '' });
+  }));
+
+  savingsEvents.forEach(event => {
+    const day = getMovementDayFromDate(event.at || event.date || event.createdAt);
+    if (!day) return;
+    const eventType = event.type === 'withdraw' ? 'Retiro de ahorro'
+      : event.type === 'complete' ? 'Meta de ahorro completada'
+      : event.type === 'destroy' ? 'Meta de ahorro gastada' : null;
+    if (!eventType) return;
+    add(day, { type: eventType, icon: event.type === 'withdraw' ? '↩️' : '🏆',
+      sign: '-', name: event.savingName || 'Ahorro', description: event.savingName || 'Ahorro',
+      amount: Number(event.amount) || 0, date: fluxoMovementDate(Y, M, day), timestamp: event.at || '' });
+  });
+
+  return byDay.map(movements => movements.sort((a, b) => String(a.timestamp).localeCompare(String(b.timestamp)) || a.type.localeCompare(b.type)));
+}
+
+function selectMovementDay(day) {
+  selectedMovementDay = day;
+  renderMovementCalendar();
+}
+
+function renderMovementCalendar() {
+  const total = dim(Y, M);
+  const first = fday(Y, M);
+  const movementsByDay = getMovementCalendarData();
+  let cells = '';
+  for (let i = 0; i < first; i++) cells += '<div class="cal-empty"></div>';
+  for (let day = 1; day <= total; day++) {
+    const movements = movementsByDay[day];
+    const isToday = new Date(Y, M, day).getTime() === today.getTime();
+    const isSelected = selectedMovementDay === day;
+    const movementKinds = [...new Set(movements.map(m => m.type === 'Gasto normal' ? 'expense' : m.type.includes('Ahorro') || m.type.includes('ahorro') ? 'saving' : m.type.includes('deuda') || m.type.includes('Deuda') ? 'debt' : m.type === 'Descuento' ? 'discount' : m.type === 'Extra' ? 'extra' : 'income'))].slice(0, 4);
+    const kindDots = movementKinds.map(kind => `<span class="movement-kind-dot ${kind}" aria-hidden="true"></span>`).join('');
+    cells += `<button type="button" class="cal-cell movement-cell${movements.length ? ' has-movements' : ''}${isSelected ? ' selected' : ''}"${isToday ? ' data-today="true"' : ''}
+      onclick="selectMovementDay(${day})" aria-label="${day} de ${MONTHS[M]}, ${movements.length} movimientos">
+      <div class="movement-day-top"><span class="cell-day" style="font-weight:${isToday ? '800' : '700'};color:${isToday ? '#f472b6' : '#e8edff'}">${day}</span>${movements.length ? `<span class="movement-count">${movements.length}</span>` : ''}</div>
+      ${movements.length ? `<div class="movement-icons">${movements.slice(0, 3).map((m, idx) => `<span class="movement-icon movement-icon-${idx}">${m.icon}</span>`).join('')}</div><div class="movement-kind-row">${kindDots}</div>` : '<div class="movement-empty">Sin movimientos</div>'}
+    </button>`;
+  }
+  const selected = selectedMovementDay ? movementsByDay[selectedMovementDay] : null;
+  const detail = !selected
+    ? '<div class="empty-state">Selecciona un día para ver sus movimientos</div>'
+    : selected.length === 0
+      ? '<div class="empty-state">Sin movimientos</div>'
+      : selected.map(movement => `<div class="movement-detail-item">
+          <div class="movement-detail-icon">${movement.icon}</div>
+          <div class="movement-detail-info"><div class="movement-detail-type">${movement.type}</div><div class="movement-detail-name">${movement.description}</div><div class="movement-detail-date">${fmtLabel(movement.date)}</div></div>
+          <div class="movement-detail-amount ${movement.sign === '+' ? 'positive' : 'negative'}">${movement.sign}${fmt(movement.amount)}</div>
+        </div>`).join('');
+  document.getElementById('cal-content').innerHTML = `
+    <div class="month-nav"><button class="nav-btn" onclick="prevMonth()">‹</button><div class="month-label"><div class="month-name">${MONTHS[M]}</div><div class="month-year">${Y}</div></div><button class="nav-btn" onclick="nextMonth()">›</button></div>
+    <button class="today-btn" onclick="goToday()">Hoy</button>
+    <div class="calendar-view-toggle"><button class="calendar-view-btn" onclick="setCalendarView('shifts')"><span class="calendar-view-icon">📅</span><span>Turnos</span></button><button class="calendar-view-btn active" onclick="setCalendarView('movements')"><span class="calendar-view-icon">💰</span><span>Movimientos</span></button></div>
+    <div class="day-headers">${WDAYS.map(day => `<div class="day-header">${day}</div>`).join('')}</div><div class="cal-grid movement-grid">${cells}</div>
+    <div class="section-title">📋 Movimientos · ${selectedMovementDay ? fmtLabel(key(Y, M, selectedMovementDay)) : MONTHS[M]}</div><div>${detail}</div>
+    <div class="footer">Los movimientos se muestran sólo en los días que ya tienen fecha o día registrados.</div>`;
+}
+
 function renderCal() {
+  if (calendarView === 'movements') { renderMovementCalendar(); return; }
   const total  = dim(Y, M);
   const first  = fday(Y, M);
   const prefix = `${Y}-${String(M + 1).padStart(2, '0')}-`;
@@ -1061,6 +1092,7 @@ function renderCal() {
       <button class="nav-btn" onclick="nextMonth()">›</button>
     </div>
     <button class="today-btn" onclick="goToday()">Hoy</button>
+    <div class="calendar-view-toggle"><button class="calendar-view-btn active" onclick="setCalendarView('shifts')"><span class="calendar-view-icon">📅</span><span>Turnos</span></button><button class="calendar-view-btn" onclick="setCalendarView('movements')"><span class="calendar-view-icon">💰</span><span>Movimientos</span></button></div>
     <div class="day-headers">${WDAYS.map(d => `<div class="day-header">${d}</div>`).join('')}</div>
     <div class="cal-grid">${cells}</div>
     <div class="section-title">📋 Modificaciones · ${MONTHS[M]}</div>
@@ -1178,7 +1210,11 @@ function addExpense() {
   if (type !== 'quincenal' && (!day || day < 1 || day > 31)) { toast('⚠️ Indica el día del mes (1-31)'); return; }
   if (type === 'quincenal' && (!day2 || day2 < 16 || day2 > 31)) { toast('⚠️ El día Q2 debe ser entre 16 y 31'); return; }
 
-  const entry = { id: Date.now(), name, type, amount, day, day2: type === 'quincenal' ? day2 : null };
+  const entry = {
+    id: Date.now(), name, type, amount, day,
+    day2: type === 'quincenal' ? day2 : null,
+    date: expenseScope === 'month' ? fluxoMovementDate(Y, M, day) : null
+  };
   if (expenseScope === 'all') { expenses.push(entry); saveExp(); }
   else {
     const mk = monthKey(Y, M);
@@ -1724,7 +1760,11 @@ function addIncome() {
   if (type !== 'quincenal' && (!day || day < 1 || day > 31)) { toast('⚠️ Indica el día del mes (1-31)'); return; }
   if (type === 'quincenal' && (!day2 || day2 < 16 || day2 > 31)) { toast('⚠️ El día Q2 debe ser entre 16 y 31'); return; }
 
-  const entry = { id: Date.now(), name, type, amount, day, day2: type === 'quincenal' ? day2 : null };
+  const entry = {
+    id: Date.now(), name, type, amount, day,
+    day2: type === 'quincenal' ? day2 : null,
+    date: incomeScope === 'month' ? fluxoMovementDate(Y, M, day) : null
+  };
   if (incomeScope === 'all') { incomes.push(entry); saveInc(); }
   else {
     const mk = monthKey(Y, M);
@@ -1831,7 +1871,12 @@ function addDebt() {
   if (freq !== 'quincenal' && (!day || day < 1 || day > 31)) { toast('⚠️ Indica el día del mes (1-31)'); return; }
   if (freq === 'quincenal' && (!day2 || day2 < 16 || day2 > 31)) { toast('⚠️ El día Q2 debe ser entre 16 y 31'); return; }
 
-  debts.push({ id: Date.now(), name, freq, total, cuota, day, day2: freq === 'quincenal' ? day2 : null, paid, startY: Y, startM: M });
+  debts.push({
+    id: Date.now(), name, freq, total, cuota, day,
+    day2: freq === 'quincenal' ? day2 : null, paid,
+    startY: Y, startM: M,
+    startDate: fluxoMovementDate(Y, M, day)
+  });
   saveDebts();
   document.getElementById('debt-name').value  = '';
   document.getElementById('debt-total').value = '';
@@ -1841,17 +1886,6 @@ function addDebt() {
   document.getElementById('debt-paid').value  = '';
   renderDebts(); renderResumen();
   toast('✅ Deuda agregada');
-}
-
-function getMonthDebtPayment(y, m) {
-  // Solo suma lo que fue registrado manualmente ese mes en payments[]
-  const mk = monthKey(y, m);
-  let total = 0;
-  debts.forEach(d => {
-    const payments = d.payments || [];
-    payments.forEach(p => { if (p.mk === mk) total += p.amount; });
-  });
-  return total;
 }
 
 function payDebtInstallment(id, customAmount) {
@@ -2091,7 +2125,7 @@ function addSaving() {
   savings.push({
     id: Date.now(), name, freq: freq || 'monthly', goal, monthly, saved, day,
     day2: freq === 'quincenal' ? day2 : null,
-    startY: Y, startM: M, payments: initialPayment
+    startY: Y, startM: M, startDate: fluxoMovementDate(Y, M, day), payments: initialPayment
   });
   saveSavings();
   document.getElementById('sav-name').value    = '';
@@ -2214,6 +2248,15 @@ async function completeSaving(id) {
   s.completedY = Y;
   s.completedM = M;
   s.completedAt = new Date().toISOString();
+
+  // Al completar la meta, el dinero ya había sido descontado del disponible
+  // mediante sus aportes. Por eso NO se registra en savingsSpent aquí: hacerlo
+  // volvería a descontar el mismo dinero. Lo que necesitamos es registrar el
+  // hecho de que el ahorro fue utilizado para que aparezca en Actividad reciente.
+  if (saved > 0) {
+    addSavingsEvent('complete', s.name, saved, Y, M);
+  }
+
   saveSavings();
   renderSavings();
   renderSavingsHistory();
@@ -2360,9 +2403,26 @@ async function deleteSaving(id) {
       icon: '🗑️'
     });
     if (!ok) return;
+    // Si la meta fue completada con la nueva lógica, la salida ya quedó
+    // registrada en savingsSpent al marcarla como cumplida. Para metas
+    // antiguas, sin ese registro, lo conservamos al eliminar el historial.
     const spent = amount;
-    if (spent > 0) {
-      savingsSpent.push({ id: Date.now() + Math.random(), mk: monthKey(s.completedY ?? Y, s.completedM ?? M), y: s.completedY ?? Y, m: s.completedM ?? M, amount: spent, savingName: s.name });
+    const completedMk = monthKey(s.completedY ?? Y, s.completedM ?? M);
+    const alreadyRecorded = savingsSpent.some(e =>
+      e.mk === completedMk &&
+      e.savingName === s.name &&
+      Number(e.amount) === spent
+    );
+    if (spent > 0 && !alreadyRecorded) {
+      savingsSpent.push({
+        id: Date.now() + Math.random(),
+        mk: completedMk,
+        y: s.completedY ?? Y,
+        m: s.completedM ?? M,
+        amount: spent,
+        savingName: s.name,
+        reason: 'complete'
+      });
       saveSavingsSpent();
     }
     savings = savings.filter(x => x.id !== id);
@@ -2513,52 +2573,6 @@ function renderSavings() {
   }
   const savEl = document.getElementById('saving-list-content');
   if (savEl) savEl.innerHTML = html;
-}
-
-function renderSavingsHistory() {
-  const contentEl = document.getElementById('fin-panel-content');
-  const completed = savings.filter(s => !!s.completed);
-  if (completed.length === 0) {
-    contentEl.innerHTML = '<div class="empty-state">Aún no tienes metas cumplidas 🏆</div>';
-    return;
-  }
-  contentEl.innerHTML = completed.map(s => {
-    const completedDate = s.completedAt ? new Date(s.completedAt) : null;
-    const completedLabel = completedDate && !isNaN(completedDate)
-      ? completedDate.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
-      : (s.completedY != null ? `${MONTHS[s.completedM ?? M]} ${s.completedY}` : 'Fecha no disponible');
-    return `<div class="saving-card" style="opacity:0.9;border-color:rgba(16,185,129,0.22)">
-      <div class="debt-card-header">
-        <div>
-          <div class="debt-name">${s.name}</div>
-          <div class="debt-meta" style="color:#6ee7b7">🏆 Completada el ${completedLabel}</div>
-        </div>
-        <div style="text-align:right">
-          <div class="debt-amount total">${fmt(s.goal)}</div>
-          <div class="debt-amount paid">Ahorrado: ${fmt(s.saved || 0)}</div>
-        </div>
-      </div>
-      <div class="saving-progress-bar"><div class="saving-progress-fill" style="width:100%;background:linear-gradient(90deg,#10b981,#34d399)"></div></div>
-      <div class="saving-progress-label">
-        <span>100% alcanzado</span>
-        <span>${fmt(s.saved || 0)} / ${fmt(s.goal)}</span>
-      </div>
-      ${(s.payments || []).length > 0 ? `<div style="margin-top:10px;border-top:1px solid rgba(16,185,129,0.16);padding-top:9px">
-        <div style="font-size:9px;color:#34d399;font-weight:700;letter-spacing:1px;margin-bottom:6px">HISTORIAL DE APORTES</div>
-        ${[...(s.payments)].sort((a,b)=>(a.y*12+a.m)-(b.y*12+b.m)).map(p =>
-          `<div style="display:flex;justify-content:space-between;font-size:11px;color:#94a3b8;padding:2px 0">
-            <span>${MONTHS[p.m]} ${p.y}${p.label ? ' · ' + p.label : ''}</span>
-            <span style="color:#6ee7b7;font-weight:600">${fmt(p.amount)}</span>
-          </div>`).join('')}
-      </div>` : ''}
-      <div class="debt-footer" style="margin-top:10px">
-        <div class="debt-cuota-info">💸 Dinero utilizado · ya no forma parte del saldo</div>
-        <div style="display:flex;gap:6px">
-          <button onclick="deleteSaving(${s.id})" class="exp-del" aria-label="Eliminar historial de meta cumplida">✕</button>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3476,16 +3490,12 @@ function showPDFModal() {
         <div style="margin-left:auto;color:#5a5a7a;font-size:18px">›</div>
       </div>
 
-      <div style="display:flex;align-items:center;gap:14px;padding:16px;background:#16161e;
-               border:1px solid rgba(255,255,255,0.04);border-radius:14px;opacity:0.5;margin-bottom:16px">
-        <div style="width:48px;height:48px;border-radius:14px;background:rgba(100,116,139,0.15);
-                    display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">✨</div>
-        <div>
-          <div style="font-size:14px;font-weight:700;color:#f1f0ff">PDF personalizado</div>
-          <div style="font-size:11px;color:#5a5a7a;margin-top:2px">Próximamente</div>
-        </div>
-        <div style="margin-left:auto;font-size:10px;color:#5a5a7a;background:rgba(100,116,139,0.15);padding:3px 8px;border-radius:6px">Soon</div>
-      </div>
+      <div style="font-size:11px;color:#a5b4fc;font-weight:700;letter-spacing:.8px;margin:18px 0 8px">REPORTES POR FECHA</div>
+      ${[['day','📅','Reporte diario','Movimientos de una fecha'],['week','🗓️','Reporte semanal','Movimientos de una semana'],['month','📊','Reporte mensual por fecha','Movimientos fechados del mes'],['range','↔️','Reporte personalizado','Rango de fechas']].map(([type, icon, title, subtitle]) => `
+      <div onclick="openReportPDFModal('${type}')" style="display:flex;align-items:center;gap:14px;padding:13px;background:#16161e;border:1px solid rgba(255,255,255,0.06);border-radius:14px;cursor:pointer;margin-bottom:8px">
+        <div style="width:42px;height:42px;border-radius:12px;background:rgba(99,102,241,0.15);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${icon}</div>
+        <div><div style="font-size:13px;font-weight:700;color:#f1f0ff">${title}</div><div style="font-size:11px;color:#5a5a7a;margin-top:2px">${subtitle}</div></div><div style="margin-left:auto;color:#5a5a7a;font-size:18px">›</div>
+      </div>`).join('')}
 
       <button onclick="document.getElementById('pdf-choice-modal').remove()"
         style="width:100%;padding:13px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);
@@ -3495,9 +3505,164 @@ function showPDFModal() {
   document.body.appendChild(modal);
 }
 
+function openReportPDFModal(type) {
+  reportPeriodType = type;
+  document.getElementById('pdf-choice-modal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'report-pdf-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10000;display:flex;align-items:flex-end;justify-content:center';
+  const title = { day: 'Reporte diario', week: 'Reporte semanal', month: 'Reporte mensual por fecha', range: 'Reporte personalizado' }[type];
+  const picker = type === 'range'
+    ? `<div style="display:flex;gap:10px"><div style="flex:1"><label class="form-label">Desde</label><input id="report-start" class="form-input" type="date" value="${reportRangeStart}"></div><div style="flex:1"><label class="form-label">Hasta</label><input id="report-end" class="form-input" type="date" value="${reportRangeEnd}"></div></div>`
+    : `<label class="form-label">${type === 'month' ? 'Mes' : 'Fecha'}</label><input id="report-date" class="form-input" type="${type === 'month' ? 'month' : 'date'}" value="${type === 'month' ? reportSelectedDate.slice(0, 7) : reportSelectedDate}">`;
+  modal.innerHTML = `<div style="background:#111118;border:1px solid rgba(124,111,247,0.2);border-radius:20px 20px 0 0;padding:24px 20px 40px;width:100%;max-width:480px"><div style="width:40px;height:4px;background:rgba(255,255,255,0.15);border-radius:2px;margin:0 auto 20px"></div><div style="font-size:16px;font-weight:700;color:#f1f0ff;margin-bottom:6px">${title}</div><div style="font-size:12px;color:#5a5a7a;margin-bottom:18px">Selecciona el período del reporte</div>${picker}<button onclick="exportReportPDFFromModal()" class="btn-add" style="width:100%;margin-top:18px">📄 Generar PDF</button><button onclick="document.getElementById('report-pdf-modal').remove()" style="width:100%;margin-top:10px;padding:13px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);color:#f87171;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif">Cancelar</button></div>`;
+  document.body.appendChild(modal);
+}
+
+function exportReportPDFFromModal() {
+  refreshReport();
+  if (!getReportPeriod()) { toast('⚠️ Selecciona un período válido'); return; }
+  document.getElementById('report-pdf-modal')?.remove();
+  exportReportPDF();
+}
+
 // ═══════════════════════════════════════════════════════
 // FINANZAS — navegación por capas
 // ═══════════════════════════════════════════════════════
+
+// ── Reportes financieros por fecha (capa de consulta, sin alterar saldos) ──
+let reportPeriodType = 'month';
+let reportSelectedDate = fluxoMovementDate(Y, M, Math.min(today.getDate(), dim(Y, M))) || `${Y}-${String(M + 1).padStart(2, '0')}-01`;
+let reportRangeStart = `${Y}-${String(M + 1).padStart(2, '0')}-01`;
+let reportRangeEnd = fluxoMovementDate(Y, M, dim(Y, M));
+
+function reportDateKey(year, month, day) {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day) || month < 0 || month > 11 || day < 1 || day > dim(year, month)) return null;
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+function reportDateFromValue(value) { return String(value || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1] || null; }
+function reportDateParts(value) {
+  const key = reportDateFromValue(value); if (!key) return null;
+  const [year, month, day] = key.split('-').map(Number);
+  return reportDateKey(year, month - 1, day) ? { year, month: month - 1, day, key } : null;
+}
+function reportDateLabel(value) { const date = reportDateParts(value); return date ? `${date.day} de ${MONTHS[date.month]} de ${date.year}` : 'Fecha no disponible'; }
+function reportMonthsBetween(start, end) {
+  const months = []; let year = start.year, month = start.month;
+  while (year * 12 + month <= end.year * 12 + end.month) { months.push({ year, month }); month++; if (month === 12) { month = 0; year++; } }
+  return months;
+}
+
+function getReportPeriod() {
+  const selected = reportDateParts(document.getElementById('report-date')?.value || reportSelectedDate);
+  const rangeStart = reportDateParts(document.getElementById('report-start')?.value || reportRangeStart);
+  const rangeEnd = reportDateParts(document.getElementById('report-end')?.value || reportRangeEnd);
+  if (reportPeriodType === 'range') return !rangeStart || !rangeEnd || rangeStart.key > rangeEnd.key ? null : { start: rangeStart, end: rangeEnd, label: `${reportDateLabel(rangeStart.key)} – ${reportDateLabel(rangeEnd.key)}`, typeLabel: 'Reporte por rango' };
+  if (!selected) return null;
+  if (reportPeriodType === 'day') return { start: selected, end: selected, label: reportDateLabel(selected.key), typeLabel: 'Reporte diario' };
+  if (reportPeriodType === 'week') {
+    const anchor = new Date(selected.year, selected.month, selected.day, 12), offset = (anchor.getDay() + 6) % 7;
+    const first = new Date(anchor); first.setDate(anchor.getDate() - offset);
+    const last = new Date(first); last.setDate(first.getDate() + 6);
+    const start = { year: first.getFullYear(), month: first.getMonth(), day: first.getDate(), key: reportDateKey(first.getFullYear(), first.getMonth(), first.getDate()) };
+    const end = { year: last.getFullYear(), month: last.getMonth(), day: last.getDate(), key: reportDateKey(last.getFullYear(), last.getMonth(), last.getDate()) };
+    return { start, end, label: `${reportDateLabel(start.key)} – ${reportDateLabel(end.key)}`, typeLabel: 'Reporte semanal' };
+  }
+  const start = { year: selected.year, month: selected.month, day: 1, key: reportDateKey(selected.year, selected.month, 1) };
+  const end = { year: selected.year, month: selected.month, day: dim(selected.year, selected.month), key: reportDateKey(selected.year, selected.month, dim(selected.year, selected.month)) };
+  return { start, end, label: `${MONTHS[selected.month]} ${selected.year}`, typeLabel: 'Reporte mensual' };
+}
+
+function getReportMovements(period) {
+  const movements = [];
+  const add = movement => { const date = reportDateFromValue(movement.date); if (date && date >= period.start.key && date <= period.end.key) movements.push({ ...movement, date }); };
+  const months = reportMonthsBetween(period.start, period.end);
+  const addRecurring = (records, scope, type, sign) => (records || []).forEach(record => {
+    const storedDate = reportDateFromValue(record.date || record.createdAt);
+    if (storedDate) { add({ date: storedDate, type, sign, description: record.name || type, amount: Number(record.amount) || 0 }); return; }
+    months.forEach(({ year, month }) => {
+      const addDay = (day, suffix = '') => add({ date: reportDateKey(year, month, Number(day)), type, sign, description: `${record.name || type}${scope === 'month' ? ' · solo este mes' : ''}${suffix}`, amount: Number(record.amount) || 0 });
+      if (record.type === 'quincenal') { addDay(record.day, ' · Q1'); addDay(record.day2, ' · Q2'); } else addDay(record.day);
+    });
+  });
+  addRecurring(expenses, 'global', 'Gasto normal', '-'); addRecurring(incomes, 'global', 'Ingreso', '+');
+  months.forEach(({ year, month }) => {
+    const mk = monthKey(year, month);
+    addRecurring(monthExpenses[mk], 'month', 'Gasto normal', '-'); addRecurring(monthIncomes[mk], 'month', 'Ingreso', '+');
+    (monthExtras[mk] || []).forEach(extra => add({ date: extra.date || extra.createdAt, type: 'Extra', sign: '+', description: extra.desc || 'Extra o recargo', amount: (Number(extra.qty) || 0) * (Number(extra.unitValue) || 0) }));
+    const earnings = calcMonthEarnings(year, month);
+    getMonthDiscData(year, month).allForMonth.forEach(discount => {
+      const date = reportDateFromValue(discount.date || discount.createdAt); if (!date) return;
+      const day = reportDateParts(date)?.day, base = discount.freq === 'quincenal' ? (day <= 15 ? earnings.q1earn : earnings.q2earn) : earnings.totalEarn;
+      add({ date, type: 'Descuento', sign: '-', description: discount.name || 'Descuento', amount: discount.type === 'pct' ? (Number(discount.pct) || 0) / 100 * base : Number(discount.fixed) || 0 });
+    });
+    debts.forEach(debt => (debt.payments || []).filter(payment => payment.mk === mk).forEach(payment => add({ date: reportDateFromValue(payment.date || payment.createdAt) || reportDateKey(year, month, payment.quincena === 'Q2' ? Number(debt.day2) : Number(debt.day)), type: 'Pago de deuda', sign: '-', description: `${debt.name || 'Deuda'}${payment.quincena ? ` · ${payment.quincena}` : ''}`, amount: Number(payment.amount) || 0 })));
+    savings.forEach(saving => (saving.payments || []).filter(payment => payment.mk === mk && payment.kind !== 'withdrawal' && payment.type !== 'withdrawal').forEach(payment => add({ date: reportDateFromValue(payment.date || payment.createdAt) || (payment.initial ? reportDateFromValue(saving.startDate) : null) || reportDateKey(year, month, payment.label === 'Q2' ? Number(saving.day2) : Number(saving.day)), type: 'Aporte a ahorro', sign: '-', description: `${saving.name || 'Ahorro'}${payment.initial ? ' · saldo inicial' : payment.label ? ` · ${payment.label}` : ''}`, amount: Math.abs(Number(payment.amount) || 0) })));
+  });
+  savingsEvents.forEach(event => {
+    const definitions = { withdraw: ['Retiro de ahorro', '+'], refund: ['Devolución de ahorro', '+'], complete: ['Meta de ahorro completada', '-'], destroy: ['Meta de ahorro gastada', '-'] };
+    if (definitions[event.type]) add({ date: event.at || event.date || event.createdAt, type: definitions[event.type][0], sign: definitions[event.type][1], description: event.savingName || 'Ahorro', amount: Number(event.amount) || 0 });
+  });
+  return movements.sort((a, b) => a.date.localeCompare(b.date) || a.type.localeCompare(b.type));
+}
+
+function getReportSummary(movements) {
+  const total = type => movements.filter(movement => movement.type === type).reduce((sum, movement) => sum + movement.amount, 0);
+  const income = total('Ingreso'), extras = total('Extra'), expenses = total('Gasto normal'), debts = total('Pago de deuda'), discounts = total('Descuento');
+  const savings = movements.filter(movement => movement.type === 'Aporte a ahorro' || movement.type.includes('Meta de ahorro')).reduce((sum, movement) => sum + movement.amount, 0);
+  const withdrawals = movements.filter(movement => movement.sign === '+' && movement.type !== 'Ingreso' && movement.type !== 'Extra').reduce((sum, movement) => sum + movement.amount, 0);
+  const totalIn = income + extras + withdrawals, totalOut = expenses + debts + discounts + savings;
+  return { income, extras, expenses, debts, discounts, savings, withdrawals, totalIn, totalOut, balance: totalIn - totalOut };
+}
+
+function setReportPeriodType(type) { reportPeriodType = type; renderReportsPanel(); }
+function refreshReport() {
+  const selected = document.getElementById('report-date')?.value;
+  reportSelectedDate = selected ? (reportPeriodType === 'month' ? `${selected}-01` : selected) : reportSelectedDate;
+  reportRangeStart = document.getElementById('report-start')?.value || reportRangeStart;
+  reportRangeEnd = document.getElementById('report-end')?.value || reportRangeEnd;
+  renderReportsPanel();
+}
+
+function renderReportsPanel() {
+  const contentEl = document.getElementById('fin-panel-content'), period = getReportPeriod(), movements = period ? getReportMovements(period) : [], summary = getReportSummary(movements);
+  const picker = reportPeriodType === 'range' ? `<div class="report-date-row"><div class="form-group"><label class="form-label">Desde</label><input id="report-start" class="form-input" type="date" value="${reportRangeStart}" onchange="refreshReport()"></div><div class="form-group"><label class="form-label">Hasta</label><input id="report-end" class="form-input" type="date" value="${reportRangeEnd}" onchange="refreshReport()"></div></div>` : `<div class="form-group"><label class="form-label">${reportPeriodType === 'month' ? 'Mes de consulta' : 'Fecha'}</label><input id="report-date" class="form-input" type="${reportPeriodType === 'month' ? 'month' : 'date'}" value="${reportPeriodType === 'month' ? reportSelectedDate.slice(0, 7) : reportSelectedDate}" onchange="refreshReport()"></div>`;
+  const details = movements.length ? movements.map(movement => `<div class="report-movement"><div><div class="report-movement-date">${reportDateLabel(movement.date)}</div><div class="report-movement-type">${movement.type}</div><div class="report-movement-name">${movement.description}</div></div><div class="${movement.sign === '+' ? 'report-positive' : 'report-negative'}">${movement.sign}${fmt(movement.amount)}</div></div>`).join('') : '<div class="empty-state">Sin movimientos con fecha registrada en este período</div>';
+  contentEl.innerHTML = `<div class="report-panel"><div class="report-period-buttons"><button class="scope-btn ${reportPeriodType === 'day' ? 'scope-active' : ''}" onclick="setReportPeriodType('day')">Diario</button><button class="scope-btn ${reportPeriodType === 'week' ? 'scope-active' : ''}" onclick="setReportPeriodType('week')">Semanal</button><button class="scope-btn ${reportPeriodType === 'month' ? 'scope-active' : ''}" onclick="setReportPeriodType('month')">Mensual</button><button class="scope-btn ${reportPeriodType === 'range' ? 'scope-active' : ''}" onclick="setReportPeriodType('range')">Personalizado</button></div>${picker}${period ? `<div class="report-period-label">${period.typeLabel} · ${period.label}</div>` : '<div class="empty-state">Selecciona un rango válido</div>'}<div class="report-summary"><div><span>Ingresos</span><strong>${fmt(summary.income)}</strong></div><div><span>Extras</span><strong>${fmt(summary.extras)}</strong></div><div><span>Gastos normales</span><strong>${fmt(summary.expenses)}</strong></div><div><span>Deudas</span><strong>${fmt(summary.debts)}</strong></div><div><span>Descuentos</span><strong>${fmt(summary.discounts)}</strong></div><div><span>Ahorros</span><strong>${fmt(summary.savings)}</strong></div><div><span>Total salidas</span><strong>${fmt(summary.totalOut)}</strong></div><div class="report-balance"><span>Balance</span><strong>${fmt(summary.balance)}</strong></div></div><button class="btn-add" onclick="exportReportPDF()" ${period ? '' : 'disabled'}>📄 Exportar reporte a PDF</button><div class="section-title">📋 Movimientos</div>${details}<div class="report-note">Se incluyen únicamente movimientos con una fecha o día ya registrado. Los registros históricos sin fecha exacta no se ubican artificialmente en un día.</div></div>`;
+}
+
+function escapeReportHtml(value) { return String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]); }
+function exportReportPDF() {
+  const period = getReportPeriod();
+  if (!period) { toast('⚠️ Selecciona un período válido'); return; }
+
+  const movements = getReportMovements(period);
+  const summary = getReportSummary(movements);
+  const popup = window.open('', '_blank');
+  if (!popup) { toast('⚠️ Permite las ventanas emergentes para exportar el PDF'); return; }
+
+  const dateStr = new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
+  const typeIcons = { 'Ingreso':'💰', 'Extra':'⏰', 'Gasto normal':'💸', 'Deuda':'💳', 'Descuento':'✂️', 'Ahorro':'🏦', 'Retiro de ahorro':'🏦' };
+  const rows = movements.map(m => {
+    const cls = m.sign === '+' ? 'green' : 'red';
+    return `<div class="pdf-exp-row ${cls}">
+      <div class="pdf-move-main"><span class="pdf-move-date">${escapeReportHtml(reportDateLabel(m.date))}</span><span class="pdf-exp-name">${typeIcons[m.type] || '📋'} ${escapeReportHtml(m.description)}</span><span class="pdf-exp-type">${escapeReportHtml(m.type)}</span></div>
+      <span class="pdf-exp-amt ${m.sign === '+' ? 'positive' : 'negative'}">${m.sign}${fmt(m.amount)}</span>
+    </div>`;
+  }).join('') || '<div class="pdf-exp-empty">Sin movimientos con fecha registrada</div>';
+
+  popup.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>FluxoApp · ${escapeReportHtml(period.typeLabel)}</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#eef0f6;color:#25243a;font-family:'Segoe UI',Arial,sans-serif}.pdf-page{width:210mm;min-height:297mm;margin:0 auto;background:#fff;padding:18mm 16mm}.pdf-header{display:flex;justify-content:space-between;align-items:center;padding-bottom:14px;border-bottom:2px solid #e8e6f7;margin-bottom:18px}.pdf-header-left{display:flex;align-items:center;gap:10px}.pdf-logo-box{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:22px}.pdf-app-name{font-size:24px;font-weight:800;color:#34325a}.pdf-app-sub{font-size:12px;color:#77758e;margin-top:2px}.pdf-header-right{text-align:right}.pdf-month-label{font-size:16px;font-weight:700;color:#34325a}.pdf-month-label span{color:#6965d8}.pdf-generated{font-size:10px;color:#8b899d;margin-top:5px}.pdf-top-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}.pdf-top-card{border-radius:14px;padding:13px;border:1px solid #e7e6ef}.pdf-top-card.blue{background:#f4f4ff;border-color:#dfdefc}.pdf-top-card.red{background:#fff5f5;border-color:#f9dddd}.pdf-top-card.green{background:#f2fbf6;border-color:#d9f1e3}.pdf-top-card-icon{font-size:18px;margin-bottom:6px}.pdf-top-card-label{font-size:10px;color:#77758e;text-transform:uppercase;letter-spacing:.4px}.pdf-top-card-val{font-size:17px;font-weight:800;margin-top:4px}.pdf-top-card.blue .pdf-top-card-val{color:#6366f1}.pdf-top-card.red .pdf-top-card-val{color:#ef4444}.pdf-top-card.green .pdf-top-card-val{color:#10b981}.pdf-top-card-sub{font-size:9px;color:#8b899d;margin-top:4px}.pdf-section{margin-top:18px}.pdf-section-title{font-size:14px;font-weight:800;color:#34325a;margin-bottom:9px;display:flex;align-items:center;gap:6px}.pdf-summary-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.pdf-summary-card{border:1px solid #ebeaf2;border-radius:10px;padding:10px;background:#fafafd}.pdf-summary-card span{display:block;font-size:10px;color:#7d7a90}.pdf-summary-card strong{display:block;font-size:15px;color:#37355c;margin-top:3px}.pdf-summary-card.balance{background:#f4f4ff;border-color:#deddfc}.pdf-summary-card.balance strong{color:#6366f1}.pdf-exp-list{border:1px solid #ebeaf2;border-radius:12px;padding:4px 10px}.pdf-exp-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 2px;border-bottom:1px solid #efedf4}.pdf-exp-row:last-child{border-bottom:0}.pdf-move-main{min-width:0;display:flex;align-items:center;gap:7px;flex-wrap:wrap}.pdf-move-date{font-size:10px;color:#77758e;min-width:54px}.pdf-exp-name{font-size:11px;color:#37354b;font-weight:600}.pdf-exp-type{font-size:9px;color:#88859a;background:#f1f0f7;border-radius:99px;padding:3px 6px}.pdf-exp-amt{font-size:12px;font-weight:800;white-space:nowrap}.positive{color:#10b981}.negative{color:#ef4444}.pdf-exp-empty{padding:20px;text-align:center;color:#9995a8;font-size:11px}.pdf-footer{margin-top:24px;padding-top:10px;border-top:1px solid #ebeaf2;display:flex;justify-content:space-between;color:#9995a8;font-size:9px}@media print{body{background:#fff}.pdf-page{margin:0;width:auto;min-height:auto;padding:12mm}.pdf-top-card-val{font-size:15px}}
+  </style></head><body><div class="pdf-page">
+    <div class="pdf-header"><div class="pdf-header-left"><div class="pdf-logo-box">💰</div><div><div class="pdf-app-name">FluxoApp</div><div class="pdf-app-sub">${escapeReportHtml(period.typeLabel)}</div></div></div><div class="pdf-header-right"><div class="pdf-month-label">${escapeReportHtml(period.label)}</div><div class="pdf-generated">Generado: ${escapeReportHtml(dateStr)}</div></div></div>
+    <div class="pdf-top-grid"><div class="pdf-top-card blue"><div class="pdf-top-card-icon">💰</div><div class="pdf-top-card-label">Total entradas</div><div class="pdf-top-card-val">${fmt(summary.income + summary.extras)}</div><div class="pdf-top-card-sub">Ingresos + extras</div></div><div class="pdf-top-card red"><div class="pdf-top-card-icon">📋</div><div class="pdf-top-card-label">Total salidas</div><div class="pdf-top-card-val">${fmt(summary.totalOut)}</div><div class="pdf-top-card-sub">Gastos, deudas, descuentos y ahorros</div></div><div class="pdf-top-card green"><div class="pdf-top-card-icon">💵</div><div class="pdf-top-card-label">Balance</div><div class="pdf-top-card-val">${fmt(summary.balance)}</div><div class="pdf-top-card-sub">Resultado del período</div></div></div>
+    <div class="pdf-section"><div class="pdf-section-title">📊 Resumen financiero</div><div class="pdf-summary-grid"><div class="pdf-summary-card"><span>Ingresos</span><strong>${fmt(summary.income)}</strong></div><div class="pdf-summary-card"><span>Extras</span><strong>${fmt(summary.extras)}</strong></div><div class="pdf-summary-card"><span>Gastos normales</span><strong>${fmt(summary.expenses)}</strong></div><div class="pdf-summary-card"><span>Deudas</span><strong>${fmt(summary.debts)}</strong></div><div class="pdf-summary-card"><span>Descuentos</span><strong>${fmt(summary.discounts)}</strong></div><div class="pdf-summary-card"><span>Ahorros</span><strong>${fmt(summary.savings)}</strong></div><div class="pdf-summary-card"><span>Total salidas</span><strong>${fmt(summary.totalOut)}</strong></div><div class="pdf-summary-card balance"><span>Balance del período</span><strong>${fmt(summary.balance)}</strong></div></div></div>
+    <div class="pdf-section"><div class="pdf-section-title">📋 Movimientos</div><div class="pdf-exp-list">${rows}</div></div>
+    <div class="pdf-footer"><span>FluxoApp · Reporte financiero</span><span>${escapeReportHtml(period.typeLabel)} · ${escapeReportHtml(period.label)}</span></div>
+  </div><script>window.onload=()=>window.print();</script></body></html>`);
+  popup.document.close();
+}
 
 const FIN_PANELS = {
   ingresos:    { title: 'Ingresos',    icon: '💰', render: renderIngresoPanel },
@@ -3696,25 +3861,40 @@ function renderSavingsHistory() {
     return;
   }
   contentEl.innerHTML = completed.map(s => {
-    const pct = 100;
-    return `<div class="saving-card" style="opacity:0.85">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div style="font-size:14px;font-weight:700;color:#f1f0ff">${s.name}</div>
-        <div style="font-size:12px;color:#6ee7b7;font-weight:700">🎯 Completado</div>
+    const completedDate = s.completedAt ? new Date(s.completedAt) : null;
+    const completedLabel = completedDate && !isNaN(completedDate)
+      ? completedDate.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
+      : (s.completedY != null ? `${MONTHS[s.completedM ?? M]} ${s.completedY}` : 'Fecha no disponible');
+    return `<div class="saving-card" style="opacity:0.9;border-color:rgba(16,185,129,0.22)">
+      <div class="debt-card-header">
+        <div>
+          <div class="debt-name">${s.name}</div>
+          <div class="debt-meta" style="color:#6ee7b7">🏆 Completada el ${completedLabel}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="debt-amount total">${fmt(s.goal)}</div>
+          <div class="debt-amount paid">Ahorrado: ${fmt(s.saved || 0)}</div>
+        </div>
       </div>
       <div class="saving-progress-bar"><div class="saving-progress-fill" style="width:100%;background:linear-gradient(90deg,#10b981,#34d399)"></div></div>
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:#5a5a7a;margin-top:4px">
-        <span>Meta: ${fmt(s.goal)}</span>
-        <span>Ahorrado: ${fmt(s.saved||0)}</span>
+      <div class="saving-progress-label">
+        <span>100% alcanzado</span>
+        <span>${fmt(s.saved || 0)} / ${fmt(s.goal)}</span>
       </div>
-      ${(s.payments||[]).length > 0 ? `<div style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.06);padding-top:8px">
-        <div style="font-size:9px;color:#34d399;font-weight:700;letter-spacing:1px;margin-bottom:6px">HISTORIAL</div>
+      ${(s.payments || []).length > 0 ? `<div style="margin-top:10px;border-top:1px solid rgba(16,185,129,0.16);padding-top:9px">
+        <div style="font-size:9px;color:#34d399;font-weight:700;letter-spacing:1px;margin-bottom:6px">HISTORIAL DE APORTES</div>
         ${[...(s.payments)].sort((a,b)=>(a.y*12+a.m)-(b.y*12+b.m)).map(p =>
-          `<div style="display:flex;justify-content:space-between;font-size:11px;color:#5a5a7a;padding:2px 0">
-            <span>${MONTHS[p.m]} ${p.y}${p.label?' · '+p.label:''}</span>
-            <span style="color:#6ee7b7">${fmt(p.amount)}</span>
+          `<div style="display:flex;justify-content:space-between;font-size:11px;color:#94a3b8;padding:2px 0">
+            <span>${MONTHS[p.m]} ${p.y}${p.label ? ' · ' + p.label : ''}</span>
+            <span style="color:#6ee7b7;font-weight:600">${fmt(p.amount)}</span>
           </div>`).join('')}
       </div>` : ''}
+      <div class="debt-footer" style="margin-top:10px">
+        <div class="debt-cuota-info">💸 Dinero utilizado · ya no forma parte del saldo</div>
+        <div style="display:flex;gap:6px">
+          <button onclick="deleteSaving(${s.id})" class="exp-del" aria-label="Eliminar historial de meta cumplida">✕</button>
+        </div>
+      </div>
     </div>`;
   }).join('');
 }
@@ -4903,31 +5083,30 @@ renderResumen();
   window.FluxoFinancialEngine = {
     month: function(year, month) {
       const y = Number(year), m = Number(month);
-      const c = calcMonth(y, m);
-      const available = getAvailableBalance(y, m);
-      const saved = getSavedAmountAt(y, m);
+      const s = getMonthSummary(y, m);
       return {
         year: y, month: m,
-        earnings: Number(c.totalEarn) || 0,
-        incomes: Number(c.incomes) || 0,
-        extras: Number(c.extrasTotal) || 0,
-        expenses: Number(c.expenses) || 0,
-        discounts: Number(c.discounts) || 0,
-        debts: Number(c.debts) || 0,
-        savingsContrib: Number(c.savingsContrib) || 0,
-        available,
-        saved,
-        totalWealth: available + saved,
-        monthlyNet: Number(c.balance) || 0
+        earnings: Number(s.totalEarn) || 0,
+        incomes: Number(s.incomes) || 0,
+        extras: Number(s.extrasTotal) || 0,
+        expenses: Number(s.expenses) || 0,
+        discounts: Number(s.discounts) || 0,
+        debts: Number(s.debts) || 0,
+        savingsContrib: Number(s.savingsContrib) || 0,
+        available: s.available,
+        saved: s.saved,
+        totalWealth: s.totalWealth,
+        monthlyNet: Number(s.balance) || 0
       };
     },
     accumulated: function(year, month) {
       const y = Number(year), m = Number(month);
+      const s = getMonthSummary(y, m);
       return {
         year: y, month: m,
-        available: getAvailableBalance(y, m),
-        saved: getSavedAmountAt(y, m),
-        totalWealth: getTotalWealth(y, m)
+        available: s.available,
+        saved: s.saved,
+        totalWealth: s.totalWealth
       };
     }
   };
@@ -5411,16 +5590,16 @@ renderResumen();
     candidates.forEach(x=>add(x[0],x[1]));
     // Scan localStorage for arrays of goal-like objects.
     try{
-      for(let i=0;i<localStorage.length;i++){
-        const k=localStorage.key(i),raw=FinanceStorage.getRaw(k);
-        if(!raw)continue;
+      FinanceStorage.allKeys().forEach(k=>{
+        const raw=FinanceStorage.getRaw(k);
+        if(!raw)return;
         try{
           const v=JSON.parse(raw);
           if(Array.isArray(v)&&v.some(x=>x&&typeof x==="object"&&("startY"in x||"startM"in x||"payments"in x||"initial"in x))){
             add("localStorage:"+k,v);
           }
         }catch(e){}
-      }
+      });
     }catch(e){}
     return found;
   }

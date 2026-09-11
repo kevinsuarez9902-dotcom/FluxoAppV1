@@ -922,3 +922,156 @@ body {
 .fluxo-confirm-delete:hover {
   opacity: .92;
 }
+
+/* Calendario de movimientos — Fase 3.1 */
+.calendar-view-toggle {
+  width: min(420px, 100%);
+  margin: 14px auto 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(129, 140, 248, .18);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, .72);
+  box-shadow: 0 10px 26px rgba(0,0,0,.14), inset 0 1px 0 rgba(255,255,255,.025);
+}
+
+.calendar-view-btn {
+  min-height: 42px;
+  border: 0;
+  border-radius: 10px;
+  padding: 8px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: #7f8fb2;
+  background: transparent;
+  font: 700 12px inherit;
+  letter-spacing: .15px;
+  cursor: pointer;
+  transition: transform .18s ease, background .18s ease, color .18s ease, box-shadow .18s ease;
+}
+
+.calendar-view-btn:hover { color: #dbe4ff; background: rgba(99,102,241,.08); }
+.calendar-view-btn:active { transform: scale(.985); }
+.calendar-view-btn.active {
+  color: #f7f8ff;
+  background: linear-gradient(135deg, rgba(99,102,241,.72), rgba(124,58,237,.58));
+  box-shadow: 0 7px 20px rgba(99,102,241,.22), inset 0 1px 0 rgba(255,255,255,.09);
+}
+.calendar-view-icon { font-size: 15px; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,.2)); }
+
+.movement-cell {
+  position: relative;
+  min-height: 78px;
+  padding: 8px 7px 7px;
+  border: 1px solid rgba(100, 116, 139, .22);
+  border-radius: 12px;
+  color: inherit;
+  background: linear-gradient(180deg, rgba(20, 27, 45, .96), rgba(11, 17, 30, .96));
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.02), 0 5px 16px rgba(0,0,0,.10);
+  transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+.movement-cell:hover { transform: translateY(-1px); border-color: rgba(129,140,248,.42); box-shadow: 0 8px 20px rgba(0,0,0,.16), inset 0 1px 0 rgba(255,255,255,.035); }
+.movement-cell:active { transform: scale(.985); }
+.movement-cell.selected { border-color: #8b5cf6; box-shadow: 0 0 0 1px rgba(139,92,246,.55), 0 10px 24px rgba(76,29,149,.18); background: linear-gradient(180deg, rgba(31, 31, 67, .98), rgba(17, 18, 39, .98)); }
+.movement-cell[data-today="true"] { border-color: rgba(244,114,182,.62); box-shadow: 0 0 0 1px rgba(244,114,182,.22), 0 0 18px rgba(244,114,182,.10); }
+
+.movement-cell.has-movements::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 78% 18%, rgba(99,102,241,.12), transparent 38%);
+  pointer-events: none;
+}
+
+.movement-day-top { position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; }
+.movement-count {
+  position: static;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(124,111,247,.30);
+  border: 1px solid rgba(167,139,250,.35);
+  color: #efeaff;
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 800;
+  box-shadow: 0 4px 10px rgba(76,29,149,.18);
+}
+
+.movement-icons {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 31px;
+  margin-top: 7px;
+}
+.movement-icon {
+  width: 25px;
+  height: 25px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  font-size: 16px;
+  line-height: 1;
+  background: rgba(99,102,241,.10);
+  border: 1px solid rgba(148,163,184,.10);
+  box-shadow: 0 5px 12px rgba(0,0,0,.12);
+}
+.movement-icon-0 { transform: translateY(1px); }
+.movement-icon-1 { transform: translateY(-1px); }
+.movement-icon-2 { transform: translateY(1px); }
+
+.movement-kind-row { position: relative; z-index: 2; display: flex; justify-content: center; gap: 4px; margin-top: 4px; }
+.movement-kind-dot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; box-shadow: 0 0 8px currentColor; }
+.movement-kind-dot.income { color: #34d399; background: #34d399; }
+.movement-kind-dot.expense { color: #f87171; background: #f87171; }
+.movement-kind-dot.saving { color: #8b5cf6; background: #8b5cf6; }
+.movement-kind-dot.debt { color: #fbbf24; background: #fbbf24; }
+.movement-kind-dot.discount { color: #fb7185; background: #fb7185; }
+.movement-kind-dot.extra { color: #22d3ee; background: #22d3ee; }
+
+.movement-empty { position: relative; z-index: 2; margin-top: 18px; color: #475569; font-size: 11px; font-weight: 600; }
+.movement-detail-item { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; padding: 10px; border: 1px solid rgba(100, 116, 139, .2); border-radius: 10px; background: rgba(15, 23, 42, .5); }
+.movement-detail-icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; background: rgba(99, 102, 241, .14); }
+.movement-detail-info { min-width: 0; flex: 1; }
+.movement-detail-type { color: #c7d2fe; font-size: 11px; font-weight: 700; }
+.movement-detail-name, .movement-detail-date { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #94a3b8; font-size: 11px; margin-top: 2px; }
+.movement-detail-date { color: #64748b; }
+.movement-detail-amount { font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.movement-detail-amount.positive { color: #6ee7b7; }
+.movement-detail-amount.negative { color: #fca5a5; }
+
+/* Reportes financieros — Fase 3.2 */
+.report-panel { display: grid; gap: 12px; }
+.report-period-buttons, .report-date-row { display: flex; gap: 7px; }
+.report-period-buttons .scope-btn { flex: 1; padding: 8px 5px; font-size: 11px; }
+.report-date-row .form-group { flex: 1; min-width: 0; }
+.report-period-label { padding: 9px 10px; border-radius: 9px; color: #c7d2fe; background: rgba(99, 102, 241, .12); font-size: 12px; font-weight: 600; }
+.report-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.report-summary > div { padding: 9px 10px; border: 1px solid rgba(100, 116, 139, .2); border-radius: 9px; background: rgba(15, 23, 42, .45); }
+.report-summary span { display: block; color: #94a3b8; font-size: 10px; }
+.report-summary strong { display: block; margin-top: 3px; color: #e2e8f0; font-family: 'DM Mono', monospace; font-size: 13px; }
+.report-summary .report-balance { border-color: rgba(99, 102, 241, .35); background: rgba(99, 102, 241, .14); }
+.report-summary .report-balance strong { color: #c7d2fe; }
+.report-movement { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px; border-bottom: 1px solid rgba(100, 116, 139, .16); }
+.report-movement-date { color: #94a3b8; font-size: 10px; }
+.report-movement-type { margin-top: 2px; color: #c7d2fe; font-size: 11px; font-weight: 700; }
+.report-movement-name { margin-top: 2px; color: #94a3b8; font-size: 11px; }
+.report-positive, .report-negative { font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.report-positive { color: #6ee7b7; }
+.report-negative { color: #fca5a5; }
+.report-note { padding: 10px; color: #64748b; border-radius: 8px; background: rgba(100, 116, 139, .08); font-size: 10px; line-height: 1.5; }
