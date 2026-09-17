@@ -204,8 +204,92 @@ function toast(msg) {
 }
 
 // ═══════════════════════════════════════════════════════
-// EXPENSES HELPERS
+// SCHEDULED MOVEMENTS — FASE 5
 // ═══════════════════════════════════════════════════════
+// Los registros nuevos con scheduleVersion=1 son plantillas/programaciones.
+// Solo una ocurrencia confirmada se incorpora al cálculo financiero.
+function getScheduledRegistrationDate(record) {
+  if (!record || record.scheduleVersion !== 1) return null;
+  const raw = record.registeredDate || record.createdAt || record.startDate;
+  if (raw && /^\d{4}-\d{2}-\d{2}/.test(String(raw))) return String(raw).slice(0, 10);
+  const sy = Number(record.startY), sm = Number(record.startM);
+  if (Number.isInteger(sy) && Number.isInteger(sm) && sm >= 0 && sm <= 11) return fluxoMovementDate(sy, sm, 1);
+  return null;
+}
+
+function isScheduledRecordActive(record, y, m, scheduledDay = null) {
+  if (!record || record.scheduleVersion !== 1) return true; // compatibilidad legacy
+  const sy = Number(record.startY);
+  const sm = Number(record.startM);
+  if (Number.isInteger(sy) && Number.isInteger(sm) && y * 12 + m < sy * 12 + sm) return false;
+
+  // La programación tampoco puede aparecer en una fecha anterior al momento
+  // exacto en que fue registrada. Esto evita, por ejemplo, registrar una luz
+  // el día 20 y verla como pendiente el día 5 del mismo mes.
+  if (scheduledDay != null) {
+    const registrationDate = getScheduledRegistrationDate(record);
+    const scheduledDate = fluxoMovementDate(y, m, Number(scheduledDay));
+    if (registrationDate && scheduledDate < registrationDate) return false;
+  }
+  return true;
+}
+
+function getScheduledOccurrence(record, y, m, slot) {
+  if (!record || record.scheduleVersion !== 1) return null;
+  const mk = monthKey(y, m);
+  return record.occurrences?.[mk]?.[slot] || null;
+}
+
+function isScheduledOccurrenceRealized(record, y, m, day, slot) {
+  if (!isScheduledRecordActive(record, y, m, day)) return false;
+  if (record.scheduleVersion !== 1) return true;
+  return getScheduledOccurrence(record, y, m, slot)?.status === 'completed';
+}
+
+function ensureScheduledOccurrence(record, y, m, slot, scheduledDay, actualDate = null) {
+  if (!record.occurrences) record.occurrences = {};
+  const mk = monthKey(y, m);
+  if (!record.occurrences[mk]) record.occurrences[mk] = {};
+  const scheduledDate = fluxoMovementDate(y, m, scheduledDay);
+  record.occurrences[mk][slot] = {
+    status: 'completed',
+    scheduledDate,
+    date: actualDate || scheduledDate,
+    completedAt: new Date().toISOString()
+  };
+}
+
+function getActualMovementDate(y, m) {
+  const targetY = Number(y), targetM = Number(m);
+  const currentY = today.getFullYear(), currentM = today.getMonth();
+  if (targetY === currentY && targetM === currentM) return fluxoMovementDate(targetY, targetM, today.getDate());
+  return null;
+}
+
+function getRecurringOccurrenceSlot(record, day) {
+  const d = Number(day);
+  if (record?.type === 'quincenal') {
+    if (d === Number(record.day)) return 'q1';
+    if (d === Number(record.day2)) return 'q2';
+  }
+  if (record?.type === 'daily') return `d${d}`;
+  return 'monthly';
+}
+
+function getCalculatedMonthExpenses(y, m) {
+  return FinanceCalculator.getRecurringItems(
+    expenses, monthExpenses[monthKey(y, m)], y, m, dim(y, m), MONTHS[m],
+    (record, yy, mm, day, slot) => isScheduledOccurrenceRealized(record, yy, mm, day, slot)
+  );
+}
+
+function getCalculatedMonthIncomes(y, m) {
+  return FinanceCalculator.getRecurringItems(
+    incomes, monthIncomes[monthKey(y, m)], y, m, dim(y, m), MONTHS[m],
+    (record, yy, mm, day, slot) => isScheduledOccurrenceRealized(record, yy, mm, day, slot)
+  );
+}
+
 function getMonthExpenses(y, m) {
   return FinanceCalculator.getRecurringItems(expenses, monthExpenses[monthKey(y, m)], y, m, dim(y, m), MONTHS[m]);
 }
@@ -526,8 +610,8 @@ function calcMonth(y, m) {
     getMonthSavingsTotal,
     getMonthDebtPayment,
     getMonthDiscounts,
-    getMonthIncomes,
-    getMonthExpenses,
+    getMonthIncomes: getCalculatedMonthIncomes,
+    getMonthExpenses: getCalculatedMonthExpenses,
     calcMonthEarnings
   });
 }
@@ -596,10 +680,166 @@ function renderResumen() {
   if (cnt.PARCIAL > 0) badgesHtml += `<span class="badge" style="background:#1c120022;color:#fbbf24;border:1px solid #d9770644">⏱️ Parcial: ${cnt.PARCIAL}</span>`;
   if (cnt.INCAP   > 0) badgesHtml += `<span class="badge" style="background:#082f49;color:#7dd3fc;border:1px solid #0891b244">🏥 Incap: ${cnt.INCAP}</span>`;
 
+  // ── FASE 4 — AGENDA FINANCIERA: próximos movimientos ──
+  // Usa los días configurados en ingresos, gastos, deudas y ahorros sin
+  // convertirlos en movimientos realizados. Solo muestra fechas futuras
+  // dentro del mes seleccionado.
+  const upcomingItems = [];
+  const now = new Date();
+  const selectedIsCurrentMonth = Y === now.getFullYear() && M === now.getMonth();
+  const minUpcomingDay = selectedIsCurrentMonth ? now.getDate() : (Y > now.getFullYear() || (Y === now.getFullYear() && M > now.getMonth()) ? 1 : Infinity);
+  const daysInSelectedMonth = dim(Y, M);
+  const pushUpcoming = (day, item) => {
+    const d = Number(day);
+    if (!Number.isInteger(d) || d < 1 || d > daysInSelectedMonth) return;
+    upcomingItems.push({ day: d, ...item });
+  };
+  const currentMk = monthKey(Y, M);
+  const currentDay = selectedIsCurrentMonth ? now.getDate() : null;
+  const occurrencePending = (record, day, slot) => {
+    if (record?.scheduleVersion !== 1) return false;
+    if (!isScheduledRecordActive(record, Y, M)) return false;
+    return !getScheduledOccurrence(record, Y, M, slot);
+  };
+  const addScheduledRecord = (record, source, kind, icon, sign) => {
+    if (!record || record.scheduleVersion !== 1) return;
+    const addOne = (day, slot, suffix = '') => {
+      const dueDay = Number(day);
+      if (!Number.isInteger(dueDay) || dueDay < 1 || dueDay > daysInSelectedMonth) return;
+      if (!isScheduledRecordActive(record, Y, M, dueDay)) return;
+      if (!occurrencePending(record, dueDay, slot)) return;
+      const dueDate = fluxoMovementDate(Y, M, dueDay);
+      const due = selectedIsCurrentMonth ? dueDay <= currentDay : (Y > now.getFullYear() || (Y === now.getFullYear() && M > now.getMonth()));
+      const status = selectedIsCurrentMonth && dueDay < currentDay ? 'Pendiente' : dueDay === currentDay && selectedIsCurrentMonth ? 'Vence hoy' : 'Programado';
+      pushUpcoming(dueDay, {
+        icon, name: record.name || kind, meta: `${status} · ${kind}${suffix}`,
+        amount: Number(record.amount) || 0, sign, scheduleKind: kind,
+        source, recordId: record.id, slot, dueDate, canConfirm: selectedIsCurrentMonth && dueDay <= currentDay
+      });
+    };
+    if (record.type === 'quincenal') {
+      addOne(record.day, 'q1', ' · Q1');
+      addOne(record.day2, 'q2', ' · Q2');
+    } else addOne(record.day, record.type === 'daily' ? `d${Number(record.day)}` : 'monthly');
+  };
+
+  (incomes || []).forEach(i => addScheduledRecord(i, 'global', 'Ingreso programado', '💰', '+'));
+  (monthIncomes[currentMk] || []).forEach(i => addScheduledRecord(i, 'month', 'Ingreso programado', '💰', '+'));
+  (expenses || []).forEach(e => addScheduledRecord(e, 'global', 'Gasto programado', '💸', '-'));
+  (monthExpenses[currentMk] || []).forEach(e => addScheduledRecord(e, 'month', 'Gasto programado', '💸', '-'));
+
+  // Deudas y ahorros ya se basan en pagos reales; aquí solo mostramos la cuota/aporte pendiente.
+  (debts || []).filter(d => (Number(d.total) || 0) - (Number(d.paid) || 0) > 0).forEach(d => {
+    const startDate = d.registeredDate || d.startDate || (Number.isInteger(Number(d.startY)) && Number.isInteger(Number(d.startM)) ? fluxoMovementDate(Number(d.startY), Number(d.startM), 1) : null);
+    const days = d.freq === 'quincenal' ? [d.day, d.day2] : [d.day];
+    days.forEach((day, idx) => {
+      const dueDay = Number(day);
+      if (!dueDay) return;
+      const scheduledDate = fluxoMovementDate(Y, M, dueDay);
+      if (startDate && scheduledDate < String(startDate).slice(0, 10)) return;
+      const slot = d.freq === 'quincenal' ? (idx === 0 ? 'q1' : 'q2') : 'monthly';
+      const paid = (d.payments || []).some(p => p.mk === currentMk && ((p.quincena === (idx === 0 ? 'Q1' : 'Q2')) || (!d.freq || d.freq !== 'quincenal')));
+      if (paid) return;
+      pushUpcoming(dueDay, { icon:'💳', name:d.name || 'Deuda', meta:`${selectedIsCurrentMonth && dueDay < currentDay ? 'Pendiente' : selectedIsCurrentMonth && dueDay === currentDay ? 'Vence hoy' : 'Programado'} · ${d.freq === 'quincenal' ? `Cuota ${idx === 0 ? 'Q1' : 'Q2'}` : 'Cuota'}`, amount:Number(d.cuota)||0, sign:'-', scheduleKind:'Cuota de deuda', source:'debt', recordId:d.id, slot, dueDate:fluxoMovementDate(Y,M,dueDay), canConfirm:selectedIsCurrentMonth && dueDay <= currentDay });
+    });
+  });
+  (savings || []).filter(s => !s.completed).forEach(s => {
+    const startDate = s.registeredDate || s.startDate || (Number.isInteger(Number(s.startY)) && Number.isInteger(Number(s.startM)) ? fluxoMovementDate(Number(s.startY), Number(s.startM), 1) : null);
+    const days = s.freq === 'quincenal' ? [s.day, s.day2] : [s.day];
+    days.forEach((day, idx) => {
+      const dueDay = Number(day); if (!dueDay) return;
+      const scheduledDate = fluxoMovementDate(Y, M, dueDay);
+      if (startDate && scheduledDate < String(startDate).slice(0, 10)) return;
+      const payments = (s.payments || []).filter(p => p.mk === currentMk && !p.initial && p.kind !== 'withdrawal' && p.type !== 'withdrawal');
+      const paid = s.freq === 'quincenal'
+        ? payments.some(p => p.label === (idx === 0 ? 'Q1' : 'Q2'))
+        : payments.length > 0;
+      if (paid) return;
+      pushUpcoming(dueDay, { icon:'🏦', name:s.name || 'Ahorro', meta:`${selectedIsCurrentMonth && dueDay < currentDay ? 'Pendiente' : selectedIsCurrentMonth && dueDay === currentDay ? 'Vence hoy' : 'Programado'} · ${s.freq === 'quincenal' ? `Aporte ${idx === 0 ? 'Q1' : 'Q2'}` : 'Aporte'}`, amount:Number(s.monthly)||0, sign:'-', scheduleKind:'Aporte a ahorro', source:'saving', recordId:s.id, slot:s.freq === 'quincenal' ? (idx === 0 ? 'q1' : 'q2') : 'monthly', dueDate:fluxoMovementDate(Y,M,dueDay), canConfirm:selectedIsCurrentMonth && dueDay <= currentDay });
+    });
+  });
+  upcomingItems.sort((a,b) => a.day - b.day || a.name.localeCompare(b.name));
+  const upcomingVisible = upcomingItems.slice(0, 7);
+  const upcomingHtml = upcomingVisible.length
+    ? upcomingVisible.map(item => `
+      <div class="upcoming-item">
+        <div class="upcoming-date"><span class="upcoming-day">${item.day}</span><span class="upcoming-month">${MONTHS[M].slice(0,3)}</span></div>
+        <div class="upcoming-icon">${item.icon}</div>
+        <div class="upcoming-info"><div class="upcoming-name">${item.name}</div><div class="upcoming-meta">${item.meta}</div></div>
+        <div class="upcoming-amount ${item.sign === '+' ? 'positive' : 'negative'}">${item.sign}${fmt(item.amount)}</div>
+        ${item.canConfirm && item.source !== 'debt' && item.source !== 'saving' ? `<button type="button" class="upcoming-confirm-btn" onclick="window.confirmScheduledMovement('${item.scheduleKind === 'Ingreso programado' ? 'income' : 'expense'}','${item.source}',${item.recordId},${item.day},'${item.slot}')">${item.sign === '+' ? 'Recibido' : 'Ya pagué'}</button>` : ''}
+        ${item.canConfirm && item.source === 'debt' ? `<button type="button" class="upcoming-confirm-btn" onclick="window.confirmDebtScheduledMovement(${item.recordId},${item.day},'${item.slot}')">Pagada</button>` : ''}
+        ${item.canConfirm && item.source === 'saving' ? `<button type="button" class="upcoming-confirm-btn" onclick="window.confirmSavingScheduledMovement(${item.recordId},${item.day},'${item.slot}')">Aportado</button>` : ''}
+      </div>`).join('')
+    : '<div class="upcoming-empty">No hay movimientos programados próximos.</div>';
+
+function confirmScheduledMovement(kind, source, id, day, slot) {
+  const list = source === 'month' ? (kind === 'income' ? monthIncomes[monthKey(Y,M)] : monthExpenses[monthKey(Y,M)]) : (kind === 'income' ? incomes : expenses);
+  const record = (list || []).find(item => String(item.id) === String(id));
+  if (!record || record.scheduleVersion !== 1) return;
+  const dueDay = Number(day);
+  if (!isScheduledRecordActive(record, Y, M, dueDay)) return;
+  const targetIdx = Y * 12 + M;
+  const todayIdx = today.getFullYear() * 12 + today.getMonth();
+  if (!dueDay || targetIdx > todayIdx || (targetIdx === todayIdx && dueDay > today.getDate())) return;
+  const actualDate = getActualMovementDate(Y, M) || fluxoMovementDate(Y, M, dueDay);
+  ensureScheduledOccurrence(record, Y, M, slot, dueDay, actualDate);
+  if (source === 'month') {
+    if (kind === 'income') saveMonthInc(); else saveMonthExp();
+  } else {
+    if (kind === 'income') saveInc(); else saveExp();
+  }
+  renderResumen(); renderCal();
+  if (currentFinPanel === 'gastos') renderExpenses();
+  if (currentFinPanel === 'ingresos') renderIncomes();
+  toast(kind === 'income' ? `💰 ${record.name || 'Ingreso'} registrado` : `💸 ${record.name || 'Gasto'} registrado`);
+}
+
+function confirmDebtScheduledMovement(id, day, slot) {
+  const debt = debts.find(d => String(d.id) === String(id));
+  if (!debt) return;
+  const dueDay = Number(day); if (!dueDay) return;
+  const mk = monthKey(Y,M);
+  const q = slot === 'q2' ? 'Q2' : slot === 'q1' ? 'Q1' : null;
+  if ((debt.payments || []).some(p => p.mk === mk && (!q || p.quincena === q))) return;
+  if (!debt.payments) debt.payments = [];
+  const actualDate = getActualMovementDate(Y, M) || fluxoMovementDate(Y, M, dueDay);
+  debt.payments.push({ mk, amount:Number(debt.cuota)||0, y:Y, m:M, quincena:q, scheduledDate:fluxoMovementDate(Y,M,dueDay), date:actualDate, createdAt:new Date().toISOString() });
+  saveDebts(); renderResumen(); renderCal();
+  if (currentFinPanel === 'deudas') renderDebts();
+  toast(`💳 ${debt.name || 'Deuda'} marcada como pagada`);
+}
+
+function confirmSavingScheduledMovement(id, day, slot) {
+  const saving = savings.find(s => String(s.id) === String(id));
+  if (!saving || saving.completed) return;
+  const dueDay = Number(day); if (!dueDay) return;
+  const mk = monthKey(Y,M);
+  const label = slot === 'q2' ? 'Q2' : slot === 'q1' ? 'Q1' : null;
+  const already = (saving.payments || []).some(p => p.mk === mk && !p.initial && p.kind !== 'withdrawal' && p.type !== 'withdrawal' && (!label || p.label === label));
+  if (already) return;
+  const amount = Math.min(Number(saving.monthly)||0, Math.max(0, Number(saving.goal)||0 - (Number(saving.saved)||0)));
+  if (amount <= 0) return;
+  const availableNow = getAvailableBalance(Y,M);
+  if (amount > availableNow) { toast(`⚠️ No tienes suficiente saldo disponible. Disponible: ${fmt(availableNow)}`); return; }
+  if (!saving.payments) saving.payments = [];
+  saving.saved = (Number(saving.saved)||0) + amount;
+  const actualDate = getActualMovementDate(Y, M) || fluxoMovementDate(Y, M, dueDay);
+  saving.payments.push({ mk, amount, y:Y, m:M, label, scheduledDate:fluxoMovementDate(Y,M,dueDay), date:actualDate, createdAt:new Date().toISOString() });
+  if (saving.saved >= saving.goal) { saving.completedY=Y; saving.completedM=M; }
+  saveSavings(); renderSavings(); renderResumen(); renderCal();
+  toast(`🏦 Aporte registrado · ${fmt(amount)}`);
+}
+
+// Exposición explícita para los botones inline de Próximos movimientos.
+window.confirmScheduledMovement = confirmScheduledMovement;
+window.confirmDebtScheduledMovement = confirmDebtScheduledMovement;
+window.confirmSavingScheduledMovement = confirmSavingScheduledMovement;
+
   // ── Actividad reciente (últimos 5 movimientos) ──
   const allActivity = [];
-  const { items: expItemsAct } = getMonthExpenses(Y, M);
-  const { items: incItemsAct  } = getMonthIncomes(Y, M);
+  const { items: expItemsAct } = getCalculatedMonthExpenses(Y, M);
+  const { items: incItemsAct  } = getCalculatedMonthIncomes(Y, M);
   const extrasAct = getMonthExtras(Y, M);
   const discDataAct = getMonthDiscounts(Y, M);
   expItemsAct.forEach(e => allActivity.push({ icon: '🛒', iconBg: 'rgba(239,68,68,0.15)', name: e.name, meta: 'Gasto', amount: `-${fmt(e.appliedAmount)}`, color: '#f87171' }));
@@ -842,6 +1082,15 @@ function renderResumen() {
       </div>
     </div>
 
+    <!-- PRÓXIMOS MOVIMIENTOS -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:700;color:var(--text)">Próximos movimientos</div>
+      <div style="font-size:11px;color:var(--accent);cursor:pointer" onclick="setCalendarView('movements');switchTab('calendar')">Ver calendario →</div>
+    </div>
+    <div class="s-card-full upcoming-card" style="margin-bottom:20px;padding:6px 14px">
+      ${upcomingHtml}
+    </div>
+
     <!-- ACTIVIDAD RECIENTE -->
     ${recentActivity.length > 0 ? `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -882,17 +1131,34 @@ function getMovementCalendarData() {
   };
   const addRecurring = (records, scope, type, icon, sign) => {
     (records || []).forEach(record => {
-      const addRecord = (day, suffix = '') => add(day, {
-        type, icon, sign, name: record.name || type, amount: Number(record.amount) || 0,
-        date: fluxoMovementDate(Y, M, day), timestamp: record.date || '',
-        description: scope === 'month' ? `${record.name || type} · solo este mes${suffix}` : `${record.name || type}${suffix}`
-      });
       const storedDateDay = getMovementDayFromDate(record.date || record.createdAt);
-      if (storedDateDay) { addRecord(storedDateDay); return; }
-      if (record.type === 'quincenal') {
-        addRecord(Number(record.day), ' · Q1');
-        addRecord(Number(record.day2), ' · Q2');
-      } else addRecord(Number(record.day));
+      if (record.scheduleVersion !== 1 && storedDateDay) {
+        add(storedDateDay, { type, icon, sign, name: record.name || type, amount: Number(record.amount) || 0,
+          status: 'completed', date: fluxoMovementDate(Y, M, storedDateDay), timestamp: record.date || record.createdAt || '',
+          source: scope, recordId: record.id, slot: 'legacy', description: `${record.name || type}${scope === 'month' ? ' · solo este mes' : ''}` });
+        return;
+      }
+      const addRecord = (day, slot, suffix = '') => {
+        const dueDay = Number(day); if (!Number.isInteger(dueDay)) return;
+        const realized = isScheduledOccurrenceRealized(record, Y, M, dueDay, slot);
+        const occ = getScheduledOccurrence(record, Y, M, slot);
+        // El calendario de movimientos representa hechos reales, no compromisos.
+        // Una programación pendiente vive en Próximos movimientos hasta que se confirma.
+        if (record.scheduleVersion === 1 && !realized) return;
+        const actualDate = record.scheduleVersion === 1
+          ? (occ?.date || fluxoMovementDate(Y, M, dueDay))
+          : (record.date || record.createdAt || fluxoMovementDate(Y, M, dueDay));
+        const actualDay = getMovementDayFromDate(actualDate);
+        if (!actualDay) return;
+        add(actualDay, {
+          type, icon, sign, name: record.name || type, amount: Number(record.amount) || 0,
+          status: 'completed', date: actualDate, timestamp: actualDate,
+          source: scope, recordId: record.id, slot,
+          description: `${record.name || type}${scope === 'month' ? ' · solo este mes' : ''}${suffix}`
+        });
+      };
+      if (record.type === 'quincenal') { addRecord(record.day, 'q1', ' · Q1'); addRecord(record.day2, 'q2', ' · Q2'); }
+      else addRecord(record.day, record.type === 'daily' ? `d${Number(record.day)}` : 'monthly');
     });
   };
 
@@ -1213,7 +1479,8 @@ function addExpense() {
   const entry = {
     id: Date.now(), name, type, amount, day,
     day2: type === 'quincenal' ? day2 : null,
-    date: expenseScope === 'month' ? fluxoMovementDate(Y, M, day) : null
+    date: expenseScope === 'month' ? fluxoMovementDate(Y, M, day) : null,
+    scheduleVersion: 1, startY: Y, startM: M, registeredDate: fluxoMovementDate(today.getFullYear(), today.getMonth(), today.getDate()), occurrences: {}
   };
   if (expenseScope === 'all') { expenses.push(entry); saveExp(); }
   else {
@@ -1763,7 +2030,8 @@ function addIncome() {
   const entry = {
     id: Date.now(), name, type, amount, day,
     day2: type === 'quincenal' ? day2 : null,
-    date: incomeScope === 'month' ? fluxoMovementDate(Y, M, day) : null
+    date: incomeScope === 'month' ? fluxoMovementDate(Y, M, day) : null,
+    scheduleVersion: 1, startY: Y, startM: M, registeredDate: fluxoMovementDate(today.getFullYear(), today.getMonth(), today.getDate()), occurrences: {}
   };
   if (incomeScope === 'all') { incomes.push(entry); saveInc(); }
   else {
@@ -1875,7 +2143,7 @@ function addDebt() {
     id: Date.now(), name, freq, total, cuota, day,
     day2: freq === 'quincenal' ? day2 : null, paid,
     startY: Y, startM: M,
-    startDate: fluxoMovementDate(Y, M, day)
+    startDate: fluxoMovementDate(Y, M, day), registeredDate: fluxoMovementDate(today.getFullYear(), today.getMonth(), today.getDate())
   });
   saveDebts();
   document.getElementById('debt-name').value  = '';
@@ -1912,7 +2180,7 @@ function payDebtInstallment(id, customAmount) {
   if (toApply <= 0) return;
   debt.paid = (debt.paid || 0) + toApply;
   const quincena = debt.freq === 'quincenal' ? (paymentsThisMonth.length === 0 ? 'Q1' : 'Q2') : null;
-  debt.payments.push({ mk, amount: toApply, y: Y, m: M, quincena });
+  debt.payments.push({ mk, amount: toApply, y: Y, m: M, quincena, date: getActualMovementDate(Y, M) || null, createdAt: new Date().toISOString() });
   if (debt.paid >= debt.total) { debt.completedY = Y; debt.completedM = M; }
   saveDebts(); renderDebts(); renderResumen();
   const pending = debt.total - debt.paid;
@@ -2125,7 +2393,7 @@ function addSaving() {
   savings.push({
     id: Date.now(), name, freq: freq || 'monthly', goal, monthly, saved, day,
     day2: freq === 'quincenal' ? day2 : null,
-    startY: Y, startM: M, startDate: fluxoMovementDate(Y, M, day), payments: initialPayment
+    startY: Y, startM: M, startDate: fluxoMovementDate(Y, M, day), registeredDate: fluxoMovementDate(today.getFullYear(), today.getMonth(), today.getDate()), payments: initialPayment
   });
   saveSavings();
   document.getElementById('sav-name').value    = '';
@@ -2190,7 +2458,7 @@ function contributeToSaving(id, dayOverride) {
   if (freq === 'quincenal') label = paymentsThisMonth.length === 0 ? 'Q1' : 'Q2';
   if (freq === 'daily')     label = `Día ${paymentsThisMonth.length + 1}`;
 
-  s.payments.push({ mk, amount: toApply, y: Y, m: M, label });
+  s.payments.push({ mk, amount: toApply, y: Y, m: M, label, date: getActualMovementDate(Y, M) || null, createdAt: new Date().toISOString() });
   if (s.saved >= s.goal) { s.completedY = Y; s.completedM = M; }
   saveSavings(); renderSavings(); renderResumen();
   const pending = s.goal - s.saved;
@@ -3579,10 +3847,20 @@ function getReportMovements(period) {
   const months = reportMonthsBetween(period.start, period.end);
   const addRecurring = (records, scope, type, sign) => (records || []).forEach(record => {
     const storedDate = reportDateFromValue(record.date || record.createdAt);
-    if (storedDate) { add({ date: storedDate, type, sign, description: record.name || type, amount: Number(record.amount) || 0 }); return; }
+    if (record.scheduleVersion !== 1 && storedDate) {
+      add({ date: storedDate, type, sign, description: record.name || type, amount: Number(record.amount) || 0 });
+      return;
+    }
     months.forEach(({ year, month }) => {
-      const addDay = (day, suffix = '') => add({ date: reportDateKey(year, month, Number(day)), type, sign, description: `${record.name || type}${scope === 'month' ? ' · solo este mes' : ''}${suffix}`, amount: Number(record.amount) || 0 });
-      if (record.type === 'quincenal') { addDay(record.day, ' · Q1'); addDay(record.day2, ' · Q2'); } else addDay(record.day);
+      const addDay = (day, slot, suffix = '') => {
+        const dueDay = Number(day);
+        if (!isScheduledOccurrenceRealized(record, year, month, dueDay, slot)) return;
+        const occ = getScheduledOccurrence(record, year, month, slot);
+        const date = reportDateFromValue(occ?.date) || reportDateKey(year, month, dueDay) || reportDateFromValue(record.date || record.createdAt);
+        add({ date, type, sign, description: `${record.name || type}${scope === 'month' ? ' · solo este mes' : ''}${suffix}`, amount: Number(record.amount) || 0 });
+      };
+      if (record.type === 'quincenal') { addDay(record.day, 'q1', ' · Q1'); addDay(record.day2, 'q2', ' · Q2'); }
+      else addDay(record.day, record.type === 'daily' ? `d${Number(record.day)}` : 'monthly');
     });
   });
   addRecurring(expenses, 'global', 'Gasto normal', '-'); addRecurring(incomes, 'global', 'Ingreso', '+');

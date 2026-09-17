@@ -47,7 +47,7 @@ const FinanceCalculator = (() => {
     );
   }
 
-  function getRecurringItems(globalItems, monthlyItems, year, month, daysInMonth, monthLabel) {
+  function getRecurringItems(globalItems, monthlyItems, year, month, daysInMonth, monthLabel, shouldInclude) {
     const allItems = [
       ...(globalItems || []).map(item => ({ ...item, _src: 'global' })),
       ...(monthlyItems || []).map(item => ({ ...item, _src: 'month' }))
@@ -56,19 +56,20 @@ const FinanceCalculator = (() => {
     const items = [];
     allItems.forEach(item => {
       const sourceLabel = item._src === 'month' ? `Solo ${monthLabel} ${year}` : null;
-      const add = (id, note) => {
+      const add = (id, note, slot, day) => {
+        if (typeof shouldInclude === 'function' && !shouldInclude(item, year, month, day, slot)) return;
         const amount = Number(item.amount) || 0;
         total += amount;
         items.push({ ...item, id, appliedAmount: amount, note: sourceLabel || note });
       };
-      if (item.type === 'monthly') add(item.id, `Día ${item.day} · mensual`);
+      if (item.type === 'monthly') add(item.id, `Día ${item.day} · mensual`, 'monthly', parseInt(item.day));
       else if (item.type === 'quincenal') {
         const day1 = parseInt(item.day), day2 = parseInt(item.day2);
-        if (day1 >= 1 && day1 <= 15) add(item.id, `Día ${day1} · Q1`);
-        if (day2 >= 16 && day2 <= daysInMonth) add(`${item.id}_q2`, `Día ${day2} · Q2`);
+        if (day1 >= 1 && day1 <= 15) add(item.id, `Día ${day1} · Q1`, 'q1', day1);
+        if (day2 >= 16 && day2 <= daysInMonth) add(`${item.id}_q2`, `Día ${day2} · Q2`, 'q2', day2);
       } else {
         const day = parseInt(item.day);
-        if (day >= 1 && day <= daysInMonth) add(item.id, `Día ${day} · diario`);
+        if (day >= 1 && day <= daysInMonth) add(item.id, `Día ${day} · diario`, `d${day}`, day);
       }
     });
     return { total, items };
