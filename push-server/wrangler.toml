@@ -1,0 +1,11 @@
+name = "fluxoapp-push"
+main = "worker.js"
+compatibility_date = "2026-09-19"
+
+[triggers]
+crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "fluxo_push"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"

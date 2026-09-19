@@ -1800,6 +1800,7 @@ async function toggleNotifications() {
     notifEnabled = true;
     FinanceStorage.setRaw(NOTIF_KEY, 'true');
     await window.FluxoNotifications?.showTest?.();
+    await window.FluxoNotifications?.syncSchedule?.();
     toast('🔔 Notificaciones activadas');
   } catch (err) {
     console.error('FluxoApp notifications:', err);

@@ -86,19 +86,19 @@ FinanceStorage.migrateStartDates({ debts, savings }, today);
 
 // ── Funciones de guardado ─────────────────────────────────
 function save()        { FinanceStorage.saveAppValue('overrides', overrides); }
-function saveExp()     { FinanceStorage.saveAppValue('expenses', expenses); }
-function saveMonthExp(){ FinanceStorage.saveAppValue('monthExpenses', monthExpenses); }
+function saveExp()     { FinanceStorage.saveAppValue('expenses', expenses); window.FluxoNotifications?.scheduleSync?.(); }
+function saveMonthExp(){ FinanceStorage.saveAppValue('monthExpenses', monthExpenses); window.FluxoNotifications?.scheduleSync?.(); }
 function saveDisc()    { FinanceStorage.saveAppValue('discounts', discounts); }
 function saveDiscMon() { FinanceStorage.saveAppValue('discountMonths', discountMonths); }
 function saveAccum()   { FinanceStorage.saveAppValue('accumBalances', accumBalances); }
-function saveInc()     { FinanceStorage.saveAppValue('incomes', incomes); }
-function saveMonthInc(){ FinanceStorage.saveAppValue('monthIncomes', monthIncomes); }
-function saveDebts()   { FinanceStorage.saveAppValue('debts', debts); }
-function saveSavings() { FinanceStorage.saveAppValue('savings', savings); }
+function saveInc()     { FinanceStorage.saveAppValue('incomes', incomes); window.FluxoNotifications?.scheduleSync?.(); }
+function saveMonthInc(){ FinanceStorage.saveAppValue('monthIncomes', monthIncomes); window.FluxoNotifications?.scheduleSync?.(); }
+function saveDebts()   { FinanceStorage.saveAppValue('debts', debts); window.FluxoNotifications?.scheduleSync?.(); }
+function saveSavings() { FinanceStorage.saveAppValue('savings', savings); window.FluxoNotifications?.scheduleSync?.(); }
 function saveSavingsEvents(){ FinanceStorage.saveAppValue('savingsEvents', savingsEvents); }
 function saveSavingsSpent(){ FinanceStorage.saveAppValue('savingsSpent', savingsSpent); }
 function saveControlStart() { FinanceStorage.saveAppValue('controlStart', controlStart); }
-function saveSchedule() { FinanceStorage.saveAppValue('schedule', schedule); }
+function saveSchedule() { FinanceStorage.saveAppValue('schedule', schedule); window.FluxoNotifications?.scheduleSync?.(); }
 function saveSalary() { FinanceStorage.saveAppValue('salary', salary); }
 function saveExtras() { FinanceStorage.saveAppValue('monthExtras', monthExtras); }
 

@@ -1,4 +1,4 @@
-const VER = '1.5';
+const VER = '1.6';
 const CACHE = 'fluxoapp-' + VER;
 
 // App shell: these files are needed to open FluxoApp after installation/offline.
@@ -9,6 +9,7 @@ const ASSETS = [
   './style.css',
   './js/config.js',
   './js/pwa.js',
+  './js/notifications.js',
   './js/app.js',
   './js/finance/financeStorage.js',
   './js/finance/calculator.js',

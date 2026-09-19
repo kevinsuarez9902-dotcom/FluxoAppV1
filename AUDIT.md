@@ -272,3 +272,10 @@ La regresión dinámica se ejecutó manualmente en el navegador con `localStorag
 8. Regresión dinámica manual aprobada. ✅
 
 **Conclusión: REFACTORIZACIÓN FINANCIERA 6A–6F FINALIZADA.**
+
+
+## Notificaciones Fase 7 — servidor push
+- Base preparada para Web Push real con Cloudflare Worker + D1.
+- Turnos conservan el aviso diario de las 20:00 para el turno del día siguiente.
+- Movimientos programados sincronizan agenda futura y no se realizan automáticamente.
+- La implementación requiere desplegar el Worker y conectar su URL en `js/notifications.js`.
