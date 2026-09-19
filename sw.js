@@ -1,4 +1,4 @@
-const VER = '1.4';
+const VER = '1.5';
 const CACHE = 'fluxoapp-' + VER;
 
 // App shell: these files are needed to open FluxoApp after installation/offline.
@@ -55,4 +55,38 @@ self.addEventListener('fetch', event => {
 
 self.addEventListener('message', event => {
   if (event.data === 'SKIP_WAITING') self.skipWaiting();
+});
+
+
+// ── Web Push ─────────────────────────────────────────
+self.addEventListener('push', event => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (_) {
+    data = { title: 'FluxoApp', body: event.data ? event.data.text() : 'Tienes un aviso pendiente.' };
+  }
+  const title = data.title || '🔔 FluxoApp';
+  const options = {
+    body: data.body || 'Tienes un movimiento programado pendiente.',
+    icon: data.icon || './icons/icon-192.png',
+    badge: data.badge || './icons/icon-192.png',
+    tag: data.tag || 'fluxo-movement',
+    renotify: !!data.renotify,
+    data: { url: data.url || './', ...(data.data || {}) }
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const target = event.notification?.data?.url || './';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      const existing = list.find(client => 'focus' in client);
+      if (existing) {
+        existing.navigate(target);
+        return existing.focus();
+      }
+      return clients.openWindow(target);
+    })
+  );
 });

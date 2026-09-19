@@ -1725,74 +1725,91 @@ function renderDiscounts() {
 }
 
 // ═══════════════════════════════════════════════════════
-// NOTIFICACIONES
+// NOTIFICACIONES — movimientos programados
+// La entrega real de avisos con la app cerrada se completa
+// mediante Web Push. Este bloque gestiona permiso, estado y
+// la suscripción local; el envío se realiza desde el backend.
 // ═══════════════════════════════════════════════════════
-const NOTIF_KEY = 'turnos_notif';
+const NOTIF_KEY = 'fluxo_notifications_enabled';
 let notifEnabled = FinanceStorage.getRaw(NOTIF_KEY) === 'true';
 
-function renderNotifStatus() {
-  const btn    = document.getElementById('notif-toggle-btn');
+async function renderNotifStatus() {
+  const btn = document.getElementById('notif-toggle-btn');
   const status = document.getElementById('notif-status');
-  if (!('Notification' in window)) {
+  if (!btn || !status) return;
+
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) {
     btn.textContent = 'No disponible';
+    btn.disabled = true;
     btn.style.cssText = 'background:#374151;color:#9ca3af;border-radius:20px;padding:7px 16px;font-size:12px;font-weight:700;cursor:not-allowed;font-family:Outfit,sans-serif;border:none;';
-    status.textContent = 'Tu dispositivo no soporta notificaciones.';
+    status.textContent = 'Este dispositivo/navegador no permite notificaciones web.';
     return;
   }
+
   if (notifEnabled && Notification.permission === 'granted') {
     btn.textContent = 'Desactivar 🔕';
+    btn.disabled = false;
     btn.style.cssText = 'background:#7f1d1d;color:#fca5a5;border-radius:20px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:Outfit,sans-serif;border:none;';
-    const tom = new Date(today); tom.setDate(tom.getDate() + 1);
-    const s   = SHIFTS[effShift(tom.getFullYear(), tom.getMonth(), tom.getDate())];
-    status.innerHTML = `✅ Activadas · Mañana: <b style="color:${s.color}">${s.icon} ${s.label}</b>`;
-  } else {
-    btn.textContent = 'Activar 🔔';
-    btn.style.cssText = 'background:#14532d;color:#6ee7b7;border-radius:20px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:Outfit,sans-serif;border:none;';
-    status.textContent = Notification.permission === 'denied'
-      ? '⚠️ Bloqueadas en tu navegador. Actívalas en Configuración.'
-      : 'Desactivadas';
+    const subscribed = await window.FluxoNotifications?.isSubscribed?.();
+    status.innerHTML = subscribed
+      ? '✅ Activadas · Lista para recibir avisos de movimientos programados.'
+      : '✅ Permiso concedido · preparando avisos de movimientos programados.';
+    return;
   }
+
+  btn.disabled = false;
+  btn.textContent = 'Activar 🔔';
+  btn.style.cssText = 'background:#14532d;color:#6ee7b7;border-radius:20px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:Outfit,sans-serif;border:none;';
+  status.textContent = Notification.permission === 'denied'
+    ? '⚠️ Bloqueadas en tu navegador. Actívalas en Configuración.'
+    : 'Desactivadas';
 }
 
 async function toggleNotifications() {
-  if (!('Notification' in window)) { toast('Tu dispositivo no soporta notificaciones'); return; }
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+    toast('Tu dispositivo no soporta notificaciones web');
+    return;
+  }
+
   if (notifEnabled) {
     notifEnabled = false;
     FinanceStorage.setRaw(NOTIF_KEY, 'false');
+    try { await window.FluxoNotifications?.unsubscribe?.(); } catch (_) {}
     toast('🔕 Notificaciones desactivadas');
     renderNotifStatus();
     return;
   }
-  const perm = await Notification.requestPermission();
-  if (perm === 'granted') {
+
+  const perm = Notification.permission === 'granted'
+    ? 'granted'
+    : await Notification.requestPermission();
+
+  if (perm !== 'granted') {
+    toast('⚠️ Permiso de notificaciones no concedido.');
+    renderNotifStatus();
+    return;
+  }
+
+  try {
+    const ready = await window.FluxoNotifications?.subscribe?.();
+    if (!ready) {
+      toast('⚠️ No se pudo preparar la suscripción de notificaciones.');
+      renderNotifStatus();
+      return;
+    }
     notifEnabled = true;
     FinanceStorage.setRaw(NOTIF_KEY, 'true');
-    scheduleNotification();
+    await window.FluxoNotifications?.showTest?.();
     toast('🔔 Notificaciones activadas');
-  } else {
-    toast('⚠️ Permiso denegado. Actívalo en configuración del navegador.');
+  } catch (err) {
+    console.error('FluxoApp notifications:', err);
+    toast('⚠️ No se pudieron activar las notificaciones.');
   }
   renderNotifStatus();
 }
 
-function scheduleNotification() {
-  if (!notifEnabled || Notification.permission !== 'granted') return;
-  const now  = new Date();
-  const fire = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 0, 0);
-  if (fire <= now) fire.setDate(fire.getDate() + 1);
-  setTimeout(() => {
-    const tom = new Date(); tom.setDate(tom.getDate() + 1);
-    const eff = effShift(tom.getFullYear(), tom.getMonth(), tom.getDate());
-    const s   = getShiftStyle(eff);
-    const body = eff !== 'DESCANSO'
-      ? `Tu turno de mañana es ${s.icon} ${s.label}`
-      : '😴 Mañana es día de descanso';
-    new Notification('📅 Mis Turnos — Mañana', { body, icon: 'https://api.iconify.design/twemoji:calendar.svg' });
-    scheduleNotification();
-  }, fire - now);
-}
-
-if (notifEnabled && Notification.permission === 'granted') scheduleNotification();
+window.renderNotifStatus = renderNotifStatus;
+window.toggleNotifications = toggleNotifications;
 
 // ═══════════════════════════════════════════════════════
 // MODAL: TURNO

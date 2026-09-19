@@ -2,7 +2,7 @@
 // PWA
 // ── VERSION: cambia este número cada vez que subas cambios ──
 // ═══════════════════════════════════════════════════════
-const APP_VERSION = '1.4';
+const APP_VERSION = '1.5';
 
 // ── Install prompt ────────────────────────────────────
 let deferredInstallPrompt = null;
