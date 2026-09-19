@@ -1,49 +1,58 @@
-const VER = '1.2';
-const CACHE = 'mis-turnos-' + VER;
+const VER = '1.4';
+const CACHE = 'fluxoapp-' + VER;
 
-// Archivos a cachear para uso offline
+// App shell: these files are needed to open FluxoApp after installation/offline.
 const ASSETS = [
   './',
   './index.html',
-  './manifest.json'
+  './manifest.json',
+  './style.css',
+  './js/config.js',
+  './js/pwa.js',
+  './js/app.js',
+  './js/finance/financeStorage.js',
+  './js/finance/calculator.js',
+  './js/finance/financeEngine.js',
+  './icons/icon-192.png',
+  './icons/icon-512.png'
 ];
 
-self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(ASSETS))
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE).then(cache => cache.addAll(ASSETS))
   );
   self.skipWaiting();
 });
 
-self.addEventListener('activate', e => {
-  // Elimina caches viejos
-  e.waitUntil(
+self.addEventListener('activate', event => {
+  event.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+      Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key)))
     )
   );
-  e.waitUntil(clients.claim());
+  event.waitUntil(clients.claim());
 });
 
-self.addEventListener('fetch', e => {
-  // Intenta la red primero; si falla, usa el cache
-  e.respondWith(
-    fetch(e.request, { cache: 'no-store' })
-      .then(res => {
-        // Guarda la respuesta fresca en cache
-        const clone = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, clone));
-        return res;
+self.addEventListener('fetch', event => {
+  // Keep the existing network-first strategy so published updates arrive promptly.
+  event.respondWith(
+    fetch(event.request, { cache: 'no-store' })
+      .then(response => {
+        if (response && response.status === 200 && response.type !== 'opaque') {
+          const clone = response.clone();
+          caches.open(CACHE).then(cache => cache.put(event.request, clone));
+        }
+        return response;
       })
-      .catch(() => caches.match(e.request).then(r =>
-        r || new Response(
-          '<h2 style="font-family:sans-serif;text-align:center;padding:40px">Sin conexión 📵<br><small>Abre la app cuando tengas internet para ver la versión más reciente.</small></h2>',
-          { headers: { 'Content-Type': 'text/html' } }
+      .catch(() => caches.match(event.request).then(response =>
+        response || new Response(
+          '<h2 style="font-family:sans-serif;text-align:center;padding:40px">Sin conexión 📵<br><small>Abre FluxoApp cuando tengas internet para ver la versión más reciente.</small></h2>',
+          { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
         )
       ))
   );
 });
 
-self.addEventListener('message', e => {
-  if (e.data === 'SKIP_WAITING') self.skipWaiting();
+self.addEventListener('message', event => {
+  if (event.data === 'SKIP_WAITING') self.skipWaiting();
 });

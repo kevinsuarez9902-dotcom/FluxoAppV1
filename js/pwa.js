@@ -2,22 +2,51 @@
 // PWA
 // ── VERSION: cambia este número cada vez que subas cambios ──
 // ═══════════════════════════════════════════════════════
-const APP_VERSION = '1.3';
+const APP_VERSION = '1.4';
 
 // ── Install prompt ────────────────────────────────────
 let deferredInstallPrompt = null;
 
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+const isIOS = /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+
+function isAppInstalled() {
+  return isStandalone;
+}
+
+function updateInstallButton() {
+  const btn = document.getElementById('install-btn');
+  if (!btn) return;
+  if (isAppInstalled()) {
+    btn.classList.remove('visible');
+    return;
+  }
+  if (deferredInstallPrompt) {
+    btn.classList.add('visible');
+    btn.textContent = '📲 Instalar app';
+    btn.onclick = triggerInstall;
+  } else if (isIOS) {
+    btn.classList.add('visible');
+    btn.textContent = '📲 Cómo instalar';
+    btn.onclick = showIOSInstallGuide;
+  }
+}
+
+function showIOSInstallGuide() {
+  const message = 'Para instalar FluxoApp en iPhone/iPad: toca Compartir en Safari y selecciona “Añadir a pantalla de inicio”.';
+  if (typeof showToast === 'function') showToast(message);
+  else window.alert(message);
+}
+
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   deferredInstallPrompt = e;
-  const btn = document.getElementById('install-btn');
-  if (btn) btn.classList.add('visible');
+  updateInstallButton();
 });
 
 window.addEventListener('appinstalled', () => {
   deferredInstallPrompt = null;
-  const btn = document.getElementById('install-btn');
-  if (btn) btn.classList.remove('visible');
+  updateInstallButton();
 });
 
 function triggerInstall() {
@@ -25,12 +54,15 @@ function triggerInstall() {
   deferredInstallPrompt.prompt();
   deferredInstallPrompt.userChoice.then(() => {
     deferredInstallPrompt = null;
-    const btn = document.getElementById('install-btn');
-    if (btn) btn.classList.remove('visible');
+    updateInstallButton();
   });
 }
 
 // ── Service Worker ────────────────────────────────────
+updateInstallButton();
+window.addEventListener('load', updateInstallButton);
+window.addEventListener('pageshow', updateInstallButton);
+
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').then(reg => {
     reg.update();

@@ -43,7 +43,7 @@ body {
 ══════════════════════════════════════════ */
 .app-header {
   background: var(--bg-mid);
-  padding: 44px 16px 12px;
+  padding: calc(44px + env(safe-area-inset-top)) 16px 12px;
   border-bottom: 1px solid var(--border);
   position: relative;
   overflow: hidden;

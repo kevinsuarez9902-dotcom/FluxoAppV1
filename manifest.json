@@ -1,8 +1,17 @@
 {
-  "name": "Fluxo",
-  "short_name": "Fluxo",
-  "start_url": ".",
+  "id": "./",
+  "name": "FluxoApp",
+  "short_name": "FluxoApp",
+  "description": "Gestión personal de finanzas, turnos y movimientos.",
+  "lang": "es-CO",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
   "background_color": "#0b1020",
   "theme_color": "#4f46e5",
   "icons": [
