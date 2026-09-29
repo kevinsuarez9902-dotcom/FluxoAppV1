@@ -2,11 +2,11 @@
 // FLUXOAPP — Web Push / Notifications
 // ═══════════════════════════════════════════════════════
 // Public VAPID key. The private key stays only on the push server.
-const FLUXO_VAPID_PUBLIC_KEY = 'BMLKAqidtrYGM24go6Ekp9tK44dwhdNQhxvQyhbb-msZiOSlT9eBhyhk_n9zzVghy1U7wh0MltDMTIfHeiSAPuc';
+const FLUXO_VAPID_PUBLIC_KEY = 'BE2ZRqB3hsyN3wzv0zIoZcADgwQolvJNXNFtRD4ufptTE19vbzzArFu86SYEwTx0fKbm0JoLrpqBDH_jWuYhGW4';
 
 // After deploying the Cloudflare Worker, put its public API URL here.
 // Example: https://fluxoapp-push.your-subdomain.workers.dev/api
-const FLUXO_PUSH_API_URL = '';
+const FLUXO_PUSH_API_URL = 'https://fluxoapp-notificaciones.kevinsuarez9902.workers.dev/api';
 const FLUXO_PUSH_SUB_KEY = 'fluxo_push_subscription';
 const FLUXO_PUSH_DEVICE_ID_KEY = 'fluxo_push_device_id';
 const FLUXO_PUSH_DEVICE_SECRET_KEY = 'fluxo_push_device_secret';
