@@ -127,15 +127,20 @@ function pushEvent(events, id, at, title, body, tag, data={}) {
   events.push({ id, sendAt: localDateTimeISO(at), title, body, tag, data });
 }
 
-function movementDue(record, y, m, day, slot) {
-  if (!record || record.scheduleVersion !== 1) return false;
-  if (typeof isScheduledRecordActive === 'function' && !isScheduledRecordActive(record,y,m,day)) return false;
-  if (typeof getScheduledOccurrence === 'function' && getScheduledOccurrence(record,y,m,slot)) return false;
+function movementDue(record, y, m, day, slot, source) {
+  if (!record) return false;
+  // Ingresos/gastos use the Fase 5 scheduleVersion lifecycle.
+  // Deudas/ahorros use their own payments lifecycle and do not carry scheduleVersion.
+  if (record.scheduleVersion !== 1 && source !== 'debt' && source !== 'saving') return false;
+  if (record.scheduleVersion === 1) {
+    if (typeof isScheduledRecordActive === 'function' && !isScheduledRecordActive(record,y,m,day)) return false;
+    if (typeof getScheduledOccurrence === 'function' && getScheduledOccurrence(record,y,m,slot)) return false;
+  }
   return true;
 }
 
 function addScheduledMovementEvents(events, record, source, kind, icon, sign, y, m, day, slot, amount) {
-  if (!movementDue(record,y,m,day,slot)) return;
+  if (!movementDue(record,y,m,day,slot,source)) return;
   const due = notificationDate(y,m,day,8,0);
   const prev = new Date(due); prev.setDate(prev.getDate()-1); prev.setHours(20,0,0,0);
   const same = new Date(due); same.setHours(20,0,0,0);

@@ -1,4 +1,4 @@
-const VER = '1.7';
+const VER = '1.8';
 const CACHE = 'fluxoapp-' + VER;
 
 // App shell: these files are needed to open FluxoApp after installation/offline.
